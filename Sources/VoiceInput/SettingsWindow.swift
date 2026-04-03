@@ -1,6 +1,6 @@
 import AppKit
 
-final class SettingsWindow: NSObject {
+final class SettingsWindow: NSObject, NSWindowDelegate {
 
     private var window: NSWindow!
     private var apiBaseUrlField: NSTextField!
@@ -23,6 +23,10 @@ final class SettingsWindow: NSObject {
         window.isReleasedWhenClosed = false
         window.isMovableByWindowBackground = true
         window.center()
+
+        window.delegate = self
+
+        setupKeyboardShortcuts()
 
         let contentView = NSView()
         contentView.translatesAutoresizingMaskIntoConstraints = false
@@ -219,5 +223,72 @@ final class SettingsWindow: NSObject {
     func show() {
         window.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
+    }
+
+    private func setupKeyboardShortcuts() {
+        NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
+            guard let self = self else { return event }
+            
+            let isCommandPressed = event.modifierFlags.contains(.command)
+            let keyCode = event.keyCode
+            
+            // Key codes: C=8, V=9, X=7, A=0
+            if isCommandPressed {
+                switch keyCode {
+                case 8: // Cmd+C
+                    Logger.settings.debug("Cmd+C captured")
+                    self.copy(nil)
+                    return nil
+                case 9: // Cmd+V
+                    Logger.settings.debug("Cmd+V captured")
+                    self.paste(nil)
+                    return nil
+                case 7: // Cmd+X
+                    Logger.settings.debug("Cmd+X captured")
+                    self.cut(nil)
+                    return nil
+                case 0: // Cmd+A
+                    Logger.settings.debug("Cmd+A captured")
+                    self.selectAll(nil)
+                    return nil
+                default:
+                    break
+                }
+            }
+            return event
+        }
+    }
+
+    func validateUserInterfaceItem(_ item: NSValidatedUserInterfaceItem) -> Bool {
+        let selector = item.action
+        let responder = window.firstResponder
+        Logger.settings.debug("validateUserInterfaceItem called: \(String(describing: selector)), firstResponder: \(String(describing: type(of: responder)))")
+        let isEditingAction = selector == #selector(copy(_:)) ||
+                              selector == #selector(paste(_:)) ||
+                              selector == #selector(cut(_:)) ||
+                              selector == #selector(selectAll(_:))
+        let result = isEditingAction && responder is NSTextField
+        Logger.settings.debug("validateUserInterfaceItem result: \(result)")
+        return result
+    }
+
+    @objc func copy(_ sender: Any?) {
+        Logger.settings.debug("copy action called")
+        window.firstResponder?.tryToPerform(#selector(copy(_:)), with: sender)
+    }
+
+    @objc func paste(_ sender: Any?) {
+        Logger.settings.debug("paste action called")
+        window.firstResponder?.tryToPerform(#selector(paste(_:)), with: sender)
+    }
+
+    @objc func cut(_ sender: Any?) {
+        Logger.settings.debug("cut action called")
+        window.firstResponder?.tryToPerform(#selector(cut(_:)), with: sender)
+    }
+
+    @objc func selectAll(_ sender: Any?) {
+        Logger.settings.debug("selectAll action called")
+        window.firstResponder?.tryToPerform(#selector(selectAll(_:)), with: sender)
     }
 }
