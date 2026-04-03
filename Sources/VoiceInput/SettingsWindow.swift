@@ -156,6 +156,7 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
     @objc private func testConnection() {
         let baseURL = apiBaseUrlField.stringValue
         let apiKey = apiKeyField.stringValue
+        let model = modelField.stringValue
 
         if baseURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             showAlert(title: "Validation Error", message: "API Base URL cannot be empty.")
@@ -168,14 +169,17 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
 
         let savedBaseURL = LLMRefiner.apiBaseUrl
         let savedKey = LLMRefiner.apiKey
+        let savedModel = LLMRefiner.model
         LLMRefiner.apiBaseUrl = baseURL
         LLMRefiner.apiKey = apiKey
+        LLMRefiner.model = model
 
         Task {
             do {
                 let response = try await LLMRefiner.testConnection()
                 LLMRefiner.apiBaseUrl = savedBaseURL
                 LLMRefiner.apiKey = savedKey
+                LLMRefiner.model = savedModel
 
                 await MainActor.run {
                     let snippet = String(response.prefix(200))
@@ -187,6 +191,7 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
             } catch {
                 LLMRefiner.apiBaseUrl = savedBaseURL
                 LLMRefiner.apiKey = savedKey
+                LLMRefiner.model = savedModel
 
                 await MainActor.run {
                     showAlert(title: "Connection Failed", message: error.localizedDescription)

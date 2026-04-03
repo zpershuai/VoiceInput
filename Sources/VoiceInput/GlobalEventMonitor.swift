@@ -1,20 +1,40 @@
-import Foundation
+import ApplicationServices
 import CoreGraphics
+import Foundation
 
 final class GlobalEventMonitor {
 
     static let fnKeyCode: CGKeyCode = 63
+    static var accessibilityPermissionChecker: () -> Bool = {
+        AXIsProcessTrusted()
+    }
+    static var accessibilityPermissionRequester: () -> Void = {
+        let options = [kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true] as CFDictionary
+        _ = AXIsProcessTrustedWithOptions(options)
+    }
 
     var onStartRecording: (() -> Void)?
     var onStopRecording: (() -> Void)?
 
     private var eventTap: CFMachPort?
+    fileprivate var isFnPressed: Bool = false
     private var runLoopSource: CFRunLoopSource?
+
+    static func checkAccessibilityPermission() -> Bool {
+        accessibilityPermissionChecker()
+    }
+
+    static func requestAccessibilityPermission() {
+        accessibilityPermissionRequester()
+    }
 
     func start() {
         stop()
 
-        let eventsOfInterest: CGEventMask = (1 << CGEventType.keyDown.rawValue) | (1 << CGEventType.keyUp.rawValue)
+        let eventsOfInterest: CGEventMask =
+            (1 << CGEventType.keyDown.rawValue) |
+            (1 << CGEventType.keyUp.rawValue) |
+            (1 << CGEventType.flagsChanged.rawValue)
 
         guard let tap = CGEvent.tapCreate(
             tap: .cgSessionEventTap,
@@ -48,6 +68,7 @@ final class GlobalEventMonitor {
         }
 
         eventTap = nil
+        isFnPressed = false
         runLoopSource = nil
     }
 }
@@ -77,6 +98,23 @@ private func globalEventTapCallback(
     case .keyUp:
         monitor.onStopRecording?()
         return nil
+
+    case .flagsChanged:
+        let isPressed = event.flags.contains(.maskSecondaryFn)
+
+        if isPressed, !monitor.isFnPressed {
+            monitor.isFnPressed = true
+            monitor.onStartRecording?()
+            return nil
+        }
+
+        if !isPressed, monitor.isFnPressed {
+            monitor.isFnPressed = false
+            monitor.onStopRecording?()
+            return nil
+        }
+
+        return Unmanaged.passUnretained(event)
 
     default:
         return Unmanaged.passUnretained(event)

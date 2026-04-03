@@ -8,19 +8,19 @@ public class FloatingWindow {
     
     private static let waveformWidth: CGFloat = 44
     private static let waveformHeight: CGFloat = 32
-    private static let paddingLeading: CGFloat = 16
-    private static let paddingTrailing: CGFloat = 16
-    private static let panelHeight: CGFloat = 56
-    private static let textMinWidth: CGFloat = 160
-    private static let textMaxWidth: CGFloat = 560
-    private static let bottomMargin: CGFloat = 80
-    private static let cornerRadius: CGFloat = 28
+    private static let paddingLeading: CGFloat = 18
+    private static let paddingTrailing: CGFloat = 20
+    private static let panelHeight: CGFloat = 64
+    private static let textMinWidth: CGFloat = 180
+    private static let textMaxWidth: CGFloat = 620
+    private static let bottomMargin: CGFloat = 92
+    private static let cornerRadius: CGFloat = 32
     
     private static let entryAnimationDuration: TimeInterval = 0.35
     private static let textTransitionDuration: TimeInterval = 0.25
     private static let exitAnimationDuration: TimeInterval = 0.22
     
-    private static let textFont = NSFont.systemFont(ofSize: 14, weight: .medium)
+    private static let textFont = NSFont.monospacedSystemFont(ofSize: 15, weight: .medium)
     
     // MARK: - Properties
     
@@ -43,22 +43,25 @@ public class FloatingWindow {
             backing: .buffered,
             defer: false
         )
-        panel.level = .floating
+        panel.level = .statusBar
         panel.isMovableByWindowBackground = false
         panel.hidesOnDeactivate = false
-        panel.collectionBehavior = [.canJoinAllSpaces, .ignoresCycle]
+        panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .ignoresCycle]
         panel.backgroundColor = .clear
         panel.isOpaque = false
         panel.hasShadow = true
         
         // Create visual effect view
         let visualEffectView = NSVisualEffectView()
-        visualEffectView.material = .hudWindow
+        visualEffectView.material = .menu
         visualEffectView.state = .active
         visualEffectView.blendingMode = .behindWindow
         visualEffectView.wantsLayer = true
         visualEffectView.layer?.cornerRadius = Self.cornerRadius
         visualEffectView.layer?.masksToBounds = true
+        visualEffectView.layer?.backgroundColor = NSColor(calibratedWhite: 0.08, alpha: 0.82).cgColor
+        visualEffectView.layer?.borderColor = NSColor(calibratedWhite: 1.0, alpha: 0.12).cgColor
+        visualEffectView.layer?.borderWidth = 1
         
         // Create waveform view
         waveformView = WaveformView(
@@ -77,6 +80,7 @@ public class FloatingWindow {
         textLabel.alignment = .left
         textLabel.lineBreakMode = .byTruncatingTail
         textLabel.maximumNumberOfLines = 1
+        textLabel.alphaValue = 0.96
         textLabel.translatesAutoresizingMaskIntoConstraints = false
         
         // Build layout
@@ -120,7 +124,8 @@ public class FloatingWindow {
         positionPanel()
 
         panel.alphaValue = 0
-        panel.makeKeyAndOrderFront(nil)
+        NSApp.activate(ignoringOtherApps: false)
+        panel.orderFrontRegardless()
 
         if let contentView = panel.contentView {
             contentView.layer?.anchorPoint = CGPoint(x: 0.5, y: 0.5)
@@ -130,6 +135,7 @@ public class FloatingWindow {
             CATransaction.begin()
             CATransaction.setAnimationDuration(Self.entryAnimationDuration)
             CATransaction.setAnimationTimingFunction(CAMediaTimingFunction(controlPoints: 0.34, 1.56, 0.64, 1.0))
+            panel.animator().alphaValue = 1.0
             contentView.layer?.transform = CATransform3DIdentity
             contentView.layer?.opacity = 1.0
             CATransaction.commit()

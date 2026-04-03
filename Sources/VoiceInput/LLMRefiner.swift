@@ -154,8 +154,8 @@ final class LLMRefiner {
     /// - Returns: The LLM's response to "Hello".
     /// - Throws: `RefineError` if the request fails or the response is malformed.
     static func testConnection() async throws -> String {
-        Logger.llm.info("Testing LLM connection to \(apiBaseUrl)")
-        
+        Logger.llm.info("Testing LLM connection to \(apiBaseUrl), model: \(model)")
+
         let requestBody = ChatCompletionRequest(
             model: model,
             messages: [

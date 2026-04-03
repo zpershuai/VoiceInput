@@ -1,8 +1,8 @@
-import AppKit
-import Foundation
-import Combine
-import Speech
 import AVFoundation
+import AppKit
+import Combine
+import Foundation
+import Speech
 
 class AppDelegate: NSObject, NSApplicationDelegate {
     // MARK: - Properties
@@ -12,7 +12,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private var speechRecognizer: SpeechRecognizer!
     private var floatingWindow: FloatingWindow!
     private var settingsWindow: SettingsWindow!
+    private var permissionAlert: PermissionAlert?
     private var isRecording: Bool = false
+    private var isEventMonitorRunning: Bool = false
 
     private var cancellables = Set<AnyCancellable>()
 
@@ -71,10 +73,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             self.isRecording = false
         }
         
-        // 5. Start the event monitor
-        eventMonitor.start()
-        
-        // 6. Observe language changes
+        // 5. Observe language changes
         LanguageManager.shared.$currentLanguage
             .dropFirst()
             .receive(on: DispatchQueue.main)
@@ -83,6 +82,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 self?.speechRecognizer.setLanguage(newLanguage)
             }
             .store(in: &cancellables)
+
+        // 6. Check accessibility permission before starting the event monitor
+        handleAccessibilityPermissionAtLaunch()
         
         Logger.app.info("Application launched successfully")
         Logger.app.info("Log file: \(Logger.shared.getLogFilePath())")
@@ -213,12 +215,45 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     // MARK: - Recording
 
+    private func handleAccessibilityPermissionAtLaunch() {
+        if GlobalEventMonitor.checkAccessibilityPermission() {
+            Logger.app.info("Accessibility permission already granted")
+            startEventMonitorIfNeeded()
+            return
+        }
+
+        Logger.app.warning("Accessibility permission missing at launch")
+        GlobalEventMonitor.requestAccessibilityPermission()
+        presentAccessibilityPermissionAlert()
+    }
+
+    private func presentAccessibilityPermissionAlert() {
+        permissionAlert = PermissionAlert { [weak self] in
+            self?.startEventMonitorIfNeeded()
+            self?.permissionAlert = nil
+        }
+
+        permissionAlert?.showAccessibilityPermissionAlert()
+    }
+
+    private func startEventMonitorIfNeeded() {
+        guard !isEventMonitorRunning else {
+            return
+        }
+
+        eventMonitor.start()
+        isEventMonitorRunning = true
+        Logger.app.info("Global event monitor started")
+    }
+
     private func startRecording() {
         guard !isRecording else { return }
         
         isRecording = true
         Logger.app.info("Starting recording...")
-        floatingWindow.show()
+        Task { @MainActor [weak self] in
+            self?.floatingWindow.show()
+        }
         
         Task {
             do {
@@ -226,8 +261,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 Logger.app.info("Recording started successfully")
             } catch {
                 Logger.app.error("Failed to start recording: \(error.localizedDescription)")
-                floatingWindow.hide()
-                isRecording = false
+                await MainActor.run { [weak self] in
+                    self?.floatingWindow.hide()
+                    self?.isRecording = false
+                }
             }
         }
     }
@@ -244,7 +281,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             guard let text, !text.isEmpty else {
                 Logger.app.warning("No text captured from speech recognition")
                 await MainActor.run {
-                    floatingWindow.hide()
+                    self.floatingWindow.hide()
                 }
                 return
             }
@@ -254,7 +291,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             if LLMRefiner.isEnabled, LLMRefiner.isConfigured {
                 Logger.llm.info("LLM refinement enabled, sending to API")
                 await MainActor.run {
-                    floatingWindow.updateStatus("Refining...")
+                    self.floatingWindow.updateStatus("Refining...")
                 }
                 
                 do {
@@ -273,7 +310,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             }
             
             await MainActor.run {
-                floatingWindow.hide()
+                self.floatingWindow.hide()
             }
         }
     }

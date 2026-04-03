@@ -30,6 +30,8 @@ final class SpeechRecognizer: NSObject {
     private var recognitionTask: SFSpeechRecognitionTask?
     private var speechRecognizer: SFSpeechRecognizer?
     private var finalTranscription: String = ""
+    private var lastTranscription: String = ""
+    private var stopContinuation: CheckedContinuation<String?, Never>?
 
     init(localeCode: String = "zh-CN") {
         self.localeCode = localeCode
@@ -82,6 +84,12 @@ final class SpeechRecognizer: NSObject {
             guard let self else { return }
 
             if let error {
+                if self.stopContinuation != nil {
+                    let fallback = self.finalTranscription.isEmpty ? self.lastTranscription : self.finalTranscription
+                    self.finishStoppingIfNeeded(with: fallback.isEmpty ? nil : fallback)
+                    return
+                }
+
                 Task { @MainActor [weak self] in
                     self?.onError?(error)
                 }
@@ -91,9 +99,11 @@ final class SpeechRecognizer: NSObject {
             guard let result else { return }
 
             let transcription = result.bestTranscription.formattedString
+            self.lastTranscription = transcription
 
             if result.isFinal {
                 self.finalTranscription = transcription
+                self.finishStoppingIfNeeded(with: transcription)
                 Task { @MainActor [weak self] in
                     self?.onFinalResult?(transcription)
                 }
@@ -109,17 +119,23 @@ final class SpeechRecognizer: NSObject {
     }
 
     func stopRecording() async -> String? {
-        recognitionTask?.cancel()
-        recognitionTask = nil
-
         audioEngine?.stop()
         audioEngine?.inputNode.removeTap(onBus: 0)
+        recognitionRequest?.endAudio()
 
-        let result = finalTranscription.isEmpty ? nil : finalTranscription
+        return await withCheckedContinuation { continuation in
+            stopContinuation = continuation
 
-        resetState()
+            Task { [weak self] in
+                try? await Task.sleep(for: .milliseconds(800))
+                await self?.flushStopIfNeeded()
+            }
+        }
+    }
 
-        return result
+    private func flushStopIfNeeded() async {
+        let result = finalTranscription.isEmpty ? lastTranscription : finalTranscription
+        finishStoppingIfNeeded(with: result.isEmpty ? nil : result)
     }
 
     func setLanguage(_ localeCode: String) {
@@ -137,6 +153,20 @@ final class SpeechRecognizer: NSObject {
         recognitionRequest = nil
         speechRecognizer = nil
         finalTranscription = ""
+        lastTranscription = ""
+        stopContinuation = nil
+    }
+
+    private func finishStoppingIfNeeded(with text: String?) {
+        guard let continuation = stopContinuation else {
+            return
+        }
+
+        stopContinuation = nil
+        recognitionTask?.cancel()
+        recognitionTask = nil
+        resetState()
+        continuation.resume(returning: text)
     }
 
     private func computeRMS(from buffer: AVAudioPCMBuffer) -> Float {

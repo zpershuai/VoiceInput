@@ -17,7 +17,7 @@
 - macOS 14.0+
 - Apple Silicon 或 Intel Mac
 - 麦克风访问权限
-- 辅助功能权限（用于文本注入）
+- 辅助功能权限（用于全局 Fn 键监听和文本注入）
 
 ## 安装
 
@@ -40,8 +40,10 @@ make install
 1. 将 `VoiceInput.app` 拖到应用程序文件夹
 2. 首次启动时，系统会请求以下权限：
    - **麦克风**：用于语音识别
-   - **辅助功能**：用于文本注入（System Preferences → Security & Privacy → Accessibility）
-3. 按住 Fn 键开始录音
+   - **辅助功能**：用于全局 Fn 键监听和文本注入（System Settings → Privacy & Security → Accessibility）
+3. 如果尚未授予辅助功能权限，应用会显示阻塞式提示窗口，并提供“打开系统设置”快捷入口
+4. 在系统设置中启用权限后，应用会自动检测并开始监听 Fn 键
+5. 按住 Fn 键开始录音
 
 ## 使用方法
 
@@ -76,6 +78,7 @@ VoiceInput/
 │   ├── main.swift           # 入口
 │   ├── AppDelegate.swift    # 应用生命周期
 │   ├── GlobalEventMonitor.swift  # 全局 Fn 键监听
+│   ├── PermissionAlert.swift     # 辅助功能权限提示
 │   ├── SpeechRecognizer.swift    # 语音识别
 │   ├── FloatingWindow.swift      # 浮动 UI 窗口
 │   ├── WaveformView.swift        # 波形动画
