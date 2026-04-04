@@ -1,4 +1,5 @@
 import ApplicationServices
+import AppKit
 import CoreGraphics
 import Foundation
 
@@ -16,8 +17,11 @@ final class GlobalEventMonitor {
     var onStartRecording: (() -> Void)?
     var onStopRecording: (() -> Void)?
 
+    var targetKeyCode: CGKeyCode = 63
+    var targetModifierFlags: UInt = 0
+
     private var eventTap: CFMachPort?
-    fileprivate var isFnPressed: Bool = false
+    fileprivate var isShortcutPressed: Bool = false
     private var runLoopSource: CFRunLoopSource?
 
     static func checkAccessibilityPermission() -> Bool {
@@ -58,6 +62,14 @@ final class GlobalEventMonitor {
         CGEvent.tapEnable(tap: tap, enable: true)
     }
 
+    func updateTargetShortcut(keyCode: CGKeyCode, modifierFlags: UInt) {
+        stop()
+        targetKeyCode = keyCode
+        targetModifierFlags = modifierFlags
+        start()
+        Logger.settings.info("Updated shortcut to keyCode: \(keyCode), modifiers: \(modifierFlags)")
+    }
+
     func stop() {
         if let tap = eventTap {
             CGEvent.tapEnable(tap: tap, enable: false)
@@ -68,7 +80,7 @@ final class GlobalEventMonitor {
         }
 
         eventTap = nil
-        isFnPressed = false
+        isShortcutPressed = false
         runLoopSource = nil
     }
 }
@@ -85,38 +97,42 @@ private func globalEventTapCallback(
 
     let monitor = Unmanaged<GlobalEventMonitor>.fromOpaque(userInfo).takeUnretainedValue()
     let keyCode = event.getIntegerValueField(.keyboardEventKeycode)
+    let flags = UInt(event.flags.rawValue & UInt64(NSEvent.ModifierFlags.deviceIndependentFlagsMask.rawValue))
 
-    guard keyCode == GlobalEventMonitor.fnKeyCode else {
-        return Unmanaged.passUnretained(event)
-    }
+    let isTargetKey = keyCode == monitor.targetKeyCode
+    let isModifierMatch = flags == monitor.targetModifierFlags
 
     switch type {
     case .keyDown:
-        monitor.onStartRecording?()
-        return nil
-
-    case .keyUp:
-        monitor.onStopRecording?()
-        return nil
-
-    case .flagsChanged:
-        let isPressed = event.flags.contains(.maskSecondaryFn)
-
-        if isPressed, !monitor.isFnPressed {
-            monitor.isFnPressed = true
+        if isTargetKey && isModifierMatch {
             monitor.onStartRecording?()
             return nil
         }
 
-        if !isPressed, monitor.isFnPressed {
-            monitor.isFnPressed = false
+    case .keyUp:
+        if isTargetKey && isModifierMatch {
             monitor.onStopRecording?()
             return nil
         }
 
-        return Unmanaged.passUnretained(event)
+    case .flagsChanged:
+        if monitor.targetKeyCode == 63 {
+            let isPressed = event.flags.contains(.maskSecondaryFn)
+            if isPressed, !monitor.isShortcutPressed {
+                monitor.isShortcutPressed = true
+                monitor.onStartRecording?()
+                return nil
+            }
+            if !isPressed, monitor.isShortcutPressed {
+                monitor.isShortcutPressed = false
+                monitor.onStopRecording?()
+                return nil
+            }
+        }
 
     default:
-        return Unmanaged.passUnretained(event)
+        break
     }
+
+    return Unmanaged.passUnretained(event)
 }

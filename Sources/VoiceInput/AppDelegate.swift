@@ -38,6 +38,12 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         floatingWindow = FloatingWindow()
         settingsWindow = SettingsWindow()
         
+        applyStoredShortcut()
+        
+        settingsWindow.setOnShortcutChanged { [weak self] _ in
+            self?.applyStoredShortcut()
+        }
+        
         Logger.app.info("Components initialized - Language: \(LanguageManager.shared.currentLanguage)")
         
         // 4. Synchronize launch-at-login state
@@ -301,5 +307,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 Logger.input.error("Text injection failed")
             }
         }
+    }
+
+    private func applyStoredShortcut() {
+        let shortcut = ShortcutManager.shared.effectiveShortcut
+        eventMonitor.updateTargetShortcut(keyCode: shortcut.keyCode, modifierFlags: shortcut.modifierFlags)
+        Logger.app.info("Applied shortcut: \(shortcut.displayString)")
     }
 }

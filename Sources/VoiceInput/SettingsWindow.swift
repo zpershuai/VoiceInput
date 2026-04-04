@@ -1,6 +1,6 @@
 import AppKit
 
-final class SettingsWindow: NSObject, NSWindowDelegate {
+final class SettingsWindow: NSObject, NSWindowDelegate, ShortcutRecorderViewDelegate {
 
     private var window: NSWindow!
     private var launchAtLoginCheckbox: NSButton!
@@ -8,6 +8,8 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
     private var apiBaseUrlField: NSTextField!
     private var apiKeyField: NSSecureTextField!
     private var modelField: NSTextField!
+    private var shortcutRecorder: ShortcutRecorderView!
+    private var onShortcutChanged: ((Shortcut?) -> Void)?
 
     override init() {
         super.init()
@@ -16,7 +18,7 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
 
     private func buildWindow() {
         window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 420, height: 320),
+            contentRect: NSRect(x: 0, y: 0, width: 420, height: 400),
             styleMask: [.titled, .closable, .miniaturizable],
             backing: .buffered,
             defer: false
@@ -33,7 +35,7 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
     }
 
     private func buildContent() {
-        let contentView = NSView(frame: NSRect(x: 0, y: 0, width: 420, height: 320))
+        let contentView = NSView(frame: NSRect(x: 0, y: 0, width: 420, height: 400))
         window.contentView = contentView
 
         let mainStack = NSStackView()
@@ -59,12 +61,39 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
         launchAtLoginCheckbox.state = LaunchAtLoginManager.isEnabled ? .on : .off
         mainStack.addArrangedSubview(launchAtLoginCheckbox)
 
-        let separator = NSBox()
-        separator.boxType = .separator
-        separator.translatesAutoresizingMaskIntoConstraints = false
-        mainStack.addArrangedSubview(separator)
+        let separator1 = NSBox()
+        separator1.boxType = .separator
+        separator1.translatesAutoresizingMaskIntoConstraints = false
+        mainStack.addArrangedSubview(separator1)
         NSLayoutConstraint.activate([
-            separator.widthAnchor.constraint(equalToConstant: 380)
+            separator1.widthAnchor.constraint(equalToConstant: 380)
+        ])
+
+        let shortcutLabel = NSTextField(labelWithString: "Keyboard Shortcut")
+        shortcutLabel.font = NSFont.boldSystemFont(ofSize: 13)
+        mainStack.addArrangedSubview(shortcutLabel)
+
+        let shortcutRow = NSStackView()
+        shortcutRow.orientation = .horizontal
+        shortcutRow.spacing = 8
+        shortcutRow.alignment = .centerY
+        shortcutRow.distribution = .fill
+        mainStack.addArrangedSubview(shortcutRow)
+
+        shortcutRecorder = ShortcutRecorderView()
+        shortcutRecorder.delegate = self
+        shortcutRow.addArrangedSubview(shortcutRecorder)
+
+        let resetButton = NSButton(title: "Reset to Default", target: self, action: #selector(resetShortcutToDefault))
+        resetButton.bezelStyle = .rounded
+        shortcutRow.addArrangedSubview(resetButton)
+
+        let separator2 = NSBox()
+        separator2.boxType = .separator
+        separator2.translatesAutoresizingMaskIntoConstraints = false
+        mainStack.addArrangedSubview(separator2)
+        NSLayoutConstraint.activate([
+            separator2.widthAnchor.constraint(equalToConstant: 380)
         ])
 
         let llmLabel = NSTextField(labelWithString: "LLM Refinement")
@@ -253,6 +282,7 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
         apiBaseUrlField.stringValue = LLMRefiner.apiBaseUrl
         apiKeyField.stringValue = LLMRefiner.apiKey
         modelField.stringValue = LLMRefiner.model
+        shortcutRecorder.setShortcut(ShortcutManager.shared.currentShortcut)
 
         window.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
@@ -311,5 +341,23 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
 
     @objc func selectAll(_ sender: Any?) {
         window.firstResponder?.tryToPerform(#selector(selectAll(_:)), with: sender)
+    }
+
+    func setOnShortcutChanged(_ callback: @escaping (Shortcut?) -> Void) {
+        onShortcutChanged = callback
+    }
+
+    func shortcutRecorderView(_ view: ShortcutRecorderView, didCaptureShortcut shortcut: Shortcut) {
+        ShortcutManager.shared.saveShortcut(shortcut)
+        onShortcutChanged?(shortcut)
+    }
+
+    func shortcutRecorderViewDidCancelRecording(_ view: ShortcutRecorderView) {
+    }
+
+    @objc private func resetShortcutToDefault() {
+        ShortcutManager.shared.resetToDefault()
+        shortcutRecorder.setShortcut(nil)
+        onShortcutChanged?(nil)
     }
 }
