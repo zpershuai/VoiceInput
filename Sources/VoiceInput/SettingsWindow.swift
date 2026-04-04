@@ -2,6 +2,9 @@ import AppKit
 
 final class SettingsWindow: NSObject, NSWindowDelegate, ShortcutRecorderViewDelegate {
 
+    private static let windowWidth: CGFloat = 420
+    private static let windowHeight: CGFloat = 400
+
     private var window: NSWindow!
     private var launchAtLoginCheckbox: NSButton!
     private var enableRefinementCheckbox: NSButton!
@@ -18,7 +21,7 @@ final class SettingsWindow: NSObject, NSWindowDelegate, ShortcutRecorderViewDele
 
     private func buildWindow() {
         window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 420, height: 400),
+            contentRect: NSRect(x: 0, y: 0, width: Self.windowWidth, height: Self.windowHeight),
             styleMask: [.titled, .closable, .miniaturizable],
             backing: .buffered,
             defer: false
@@ -35,12 +38,12 @@ final class SettingsWindow: NSObject, NSWindowDelegate, ShortcutRecorderViewDele
     }
 
     private func buildContent() {
-        let contentView = NSView(frame: NSRect(x: 0, y: 0, width: 420, height: 400))
+        let contentView = NSView(frame: NSRect(x: 0, y: 0, width: Self.windowWidth, height: Self.windowHeight))
         window.contentView = contentView
 
         let mainStack = NSStackView()
         mainStack.orientation = .vertical
-        mainStack.spacing = 12
+        mainStack.spacing = 10
         mainStack.translatesAutoresizingMaskIntoConstraints = false
         mainStack.alignment = .leading
         mainStack.distribution = .fill
@@ -48,9 +51,10 @@ final class SettingsWindow: NSObject, NSWindowDelegate, ShortcutRecorderViewDele
         contentView.addSubview(mainStack)
 
         NSLayoutConstraint.activate([
-            mainStack.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 20),
+            mainStack.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 16),
             mainStack.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 20),
             mainStack.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -20),
+            mainStack.bottomAnchor.constraint(lessThanOrEqualTo: contentView.bottomAnchor, constant: -16)
         ])
 
         let generalLabel = NSTextField(labelWithString: "General")

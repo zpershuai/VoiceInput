@@ -7,6 +7,8 @@ import Speech
 class AppDelegate: NSObject, NSApplicationDelegate {
     // MARK: - Properties
 
+    private static let settingsShortcutKey = ","
+
     private var statusItem: NSStatusItem!
     private var eventMonitor: GlobalEventMonitor!
     private var speechRecognizer: SpeechRecognizer!
@@ -31,6 +33,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         
         // 2. Build the menu bar menu
         buildMenuBar()
+        setupAppKeyboardShortcuts()
         
         // 3. Initialize all components
         eventMonitor = GlobalEventMonitor()
@@ -115,6 +118,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func buildMenuBar() {
         let menu = NSMenu(title: "VoiceInput")
+        menu.showsStateColumn = false
 
         // Title item
         let titleItem = NSMenuItem(title: "VoiceInput", action: nil, keyEquivalent: "")
@@ -127,15 +131,16 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         let languageMenu = buildLanguageMenu()
         let languageItem = NSMenuItem(title: "Language", action: nil, keyEquivalent: "")
         languageItem.submenu = languageMenu
+        languageItem.image = menuItemIcon(systemName: "globe")
         menu.addItem(languageItem)
 
         menu.addItem(NSMenuItem.separator())
 
         // Settings
         let settingsItem = NSMenuItem(
-            title: "Settings...",
+            title: "Settings",
             action: #selector(openSettings),
-            keyEquivalent: ","
+            keyEquivalent: ""
         )
         settingsItem.target = self
         menu.addItem(settingsItem)
@@ -145,6 +150,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         // Quit
         let quitItem = NSMenuItem(title: "Quit VoiceInput", action: #selector(quitApp), keyEquivalent: "q")
         quitItem.target = self
+        quitItem.image = menuItemIcon(systemName: "power")
         menu.addItem(quitItem)
 
         statusItem.menu = menu
@@ -170,6 +176,12 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         return menu
     }
 
+    private func menuItemIcon(systemName: String) -> NSImage? {
+        let image = NSImage(systemSymbolName: systemName, accessibilityDescription: nil)
+        image?.isTemplate = true
+        return image
+    }
+
     @objc private func languageSelected(_ sender: NSMenuItem) {
         guard let code = sender.representedObject as? String else { return }
 
@@ -189,6 +201,22 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     @objc private func openSettings() {
         settingsWindow.show()
+    }
+
+    private func setupAppKeyboardShortcuts() {
+        NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
+            guard let self else { return event }
+
+            let modifierFlags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
+            let isCommandOnly = modifierFlags == .command
+
+            guard isCommandOnly, event.charactersIgnoringModifiers == Self.settingsShortcutKey else {
+                return event
+            }
+
+            self.openSettings()
+            return nil
+        }
     }
 
     @objc private func quitApp() {
