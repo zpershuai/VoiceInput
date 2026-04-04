@@ -3,6 +3,8 @@ import AppKit
 final class SettingsWindow: NSObject, NSWindowDelegate {
 
     private var window: NSWindow!
+    private var launchAtLoginCheckbox: NSButton!
+    private var enableRefinementCheckbox: NSButton!
     private var apiBaseUrlField: NSTextField!
     private var apiKeyField: NSSecureTextField!
     private var modelField: NSTextField!
@@ -14,12 +16,12 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
 
     private func buildWindow() {
         window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 420, height: 280),
+            contentRect: NSRect(x: 0, y: 0, width: 420, height: 320),
             styleMask: [.titled, .closable, .miniaturizable],
             backing: .buffered,
             defer: false
         )
-        window.title = "LLM Refinement Settings"
+        window.title = "Settings"
         window.isReleasedWhenClosed = false
         window.isMovableByWindowBackground = true
         window.center()
@@ -27,44 +29,82 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
         window.delegate = self
 
         setupKeyboardShortcuts()
+        buildContent()
+    }
 
-        let contentView = NSView()
-        contentView.translatesAutoresizingMaskIntoConstraints = false
+    private func buildContent() {
+        let contentView = NSView(frame: NSRect(x: 0, y: 0, width: 420, height: 320))
         window.contentView = contentView
+
+        let mainStack = NSStackView()
+        mainStack.orientation = .vertical
+        mainStack.spacing = 12
+        mainStack.translatesAutoresizingMaskIntoConstraints = false
+        mainStack.alignment = .leading
+        mainStack.distribution = .fill
+
+        contentView.addSubview(mainStack)
+
+        NSLayoutConstraint.activate([
+            mainStack.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 20),
+            mainStack.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 20),
+            mainStack.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -20),
+        ])
+
+        let generalLabel = NSTextField(labelWithString: "General")
+        generalLabel.font = NSFont.boldSystemFont(ofSize: 13)
+        mainStack.addArrangedSubview(generalLabel)
+
+        launchAtLoginCheckbox = NSButton(checkboxWithTitle: "Launch at Login", target: self, action: #selector(launchAtLoginToggled))
+        launchAtLoginCheckbox.state = LaunchAtLoginManager.isEnabled ? .on : .off
+        mainStack.addArrangedSubview(launchAtLoginCheckbox)
+
+        let separator = NSBox()
+        separator.boxType = .separator
+        separator.translatesAutoresizingMaskIntoConstraints = false
+        mainStack.addArrangedSubview(separator)
+        NSLayoutConstraint.activate([
+            separator.widthAnchor.constraint(equalToConstant: 380)
+        ])
+
+        let llmLabel = NSTextField(labelWithString: "LLM Refinement")
+        llmLabel.font = NSFont.boldSystemFont(ofSize: 13)
+        mainStack.addArrangedSubview(llmLabel)
+
+        enableRefinementCheckbox = NSButton(checkboxWithTitle: "Enable LLM Refinement", target: self, action: #selector(enableRefinementToggled))
+        enableRefinementCheckbox.state = LLMRefiner.isEnabled ? .on : .off
+        mainStack.addArrangedSubview(enableRefinementCheckbox)
 
         let formStack = NSStackView()
         formStack.orientation = .vertical
-        formStack.spacing = 12
-        formStack.translatesAutoresizingMaskIntoConstraints = false
+        formStack.spacing = 8
         formStack.alignment = .leading
         formStack.distribution = .fill
+        mainStack.addArrangedSubview(formStack)
 
-        formStack.addArrangedSubview(makeTextFieldGroup(
-            label: "API Base URL",
-            placeholder: "https://api.example.com",
-            defaultValue: LLMRefiner.apiBaseUrl,
-            secure: false
-        ))
+        let apiBaseUrlRow = createFormRow(label: "API Base URL", placeholder: "https://api.openai.com", defaultValue: LLMRefiner.apiBaseUrl, isSecure: false)
+        apiBaseUrlField = apiBaseUrlRow.field
+        formStack.addArrangedSubview(apiBaseUrlRow.view)
 
-        formStack.addArrangedSubview(makeSecureFieldGroup(
-            label: "API Key",
-            placeholder: "sk-...",
-            defaultValue: LLMRefiner.apiKey
-        ))
+        let apiKeyRow = createFormRow(label: "API Key", placeholder: "sk-...", defaultValue: LLMRefiner.apiKey, isSecure: true)
+        apiKeyField = apiKeyRow.secureField!
+        formStack.addArrangedSubview(apiKeyRow.view)
 
-        formStack.addArrangedSubview(makeTextFieldGroup(
-            label: "Model",
-            placeholder: "gpt-4o",
-            defaultValue: LLMRefiner.model,
-            secure: false
-        ))
+        let modelRow = createFormRow(label: "Model", placeholder: "gpt-4o-mini", defaultValue: LLMRefiner.model, isSecure: false)
+        modelField = modelRow.field
+        formStack.addArrangedSubview(modelRow.view)
+
+        NSLayoutConstraint.activate([
+            apiBaseUrlRow.field.widthAnchor.constraint(equalToConstant: 320),
+            apiKeyRow.field.widthAnchor.constraint(equalToConstant: 320),
+            modelRow.field.widthAnchor.constraint(equalToConstant: 320),
+        ])
 
         let buttonStack = NSStackView()
         buttonStack.orientation = .horizontal
         buttonStack.spacing = 8
-        buttonStack.translatesAutoresizingMaskIntoConstraints = false
-        buttonStack.alignment = .centerY
-        buttonStack.distribution = .fillProportionally
+        buttonStack.distribution = .fill
+        mainStack.addArrangedSubview(buttonStack)
 
         let testButton = NSButton(title: "Test", target: self, action: #selector(testConnection))
         testButton.bezelStyle = .rounded
@@ -75,82 +115,63 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
 
         buttonStack.addArrangedSubview(testButton)
         buttonStack.addArrangedSubview(saveButton)
-
-        contentView.addSubview(formStack)
-        contentView.addSubview(buttonStack)
-
-        NSLayoutConstraint.activate([
-            formStack.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 20),
-            formStack.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 20),
-            formStack.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -20),
-
-            buttonStack.topAnchor.constraint(equalTo: formStack.bottomAnchor, constant: 20),
-            buttonStack.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 20),
-            buttonStack.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -20),
-            buttonStack.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -20),
-        ])
     }
 
-    private func makeTextFieldGroup(label text: String, placeholder: String, defaultValue: String, secure: Bool) -> NSView {
-        let container = NSStackView()
-        container.orientation = .vertical
-        container.spacing = 4
-        container.alignment = .leading
-        container.distribution = .fill
+    private func createFormRow(label: String, placeholder: String, defaultValue: String, isSecure: Bool) -> (view: NSView, field: NSTextField, secureField: NSSecureTextField?) {
+        let container = NSView()
+        container.translatesAutoresizingMaskIntoConstraints = false
 
-        let label = NSTextField(labelWithString: text)
-        label.font = NSFont.boldSystemFont(ofSize: 13)
-        label.translatesAutoresizingMaskIntoConstraints = false
+        let labelView = NSTextField(labelWithString: label)
+        labelView.font = NSFont.systemFont(ofSize: 12)
+        labelView.translatesAutoresizingMaskIntoConstraints = false
+        container.addSubview(labelView)
 
-        let field = NSTextField()
-        field.placeholderString = placeholder
-        field.stringValue = defaultValue
-        field.translatesAutoresizingMaskIntoConstraints = false
-        field.focusRingType = .exterior
-
-        if text == "API Base URL" {
-            apiBaseUrlField = field
-        } else if text == "Model" {
-            modelField = field
+        let field: NSTextField
+        var secureField: NSSecureTextField? = nil
+        
+        if isSecure {
+            let sf = NSSecureTextField()
+            sf.placeholderString = placeholder
+            sf.stringValue = defaultValue
+            sf.translatesAutoresizingMaskIntoConstraints = false
+            sf.focusRingType = .exterior
+            field = sf
+            secureField = sf
+        } else {
+            field = NSTextField()
+            field.placeholderString = placeholder
+            field.stringValue = defaultValue
+            field.translatesAutoresizingMaskIntoConstraints = false
+            field.focusRingType = .exterior
         }
-
-        container.addArrangedSubview(label)
-        container.addArrangedSubview(field)
+        container.addSubview(field)
 
         NSLayoutConstraint.activate([
-            field.widthAnchor.constraint(equalTo: container.widthAnchor)
+            labelView.topAnchor.constraint(equalTo: container.topAnchor),
+            labelView.leadingAnchor.constraint(equalTo: container.leadingAnchor),
+
+            field.topAnchor.constraint(equalTo: labelView.bottomAnchor, constant: 4),
+            field.leadingAnchor.constraint(equalTo: container.leadingAnchor),
+            field.trailingAnchor.constraint(equalTo: container.trailingAnchor),
+            field.bottomAnchor.constraint(equalTo: container.bottomAnchor),
+
+            container.widthAnchor.constraint(equalToConstant: 320),
         ])
 
-        return container
+        return (container, field, secureField)
     }
 
-    private func makeSecureFieldGroup(label text: String, placeholder: String, defaultValue: String) -> NSView {
-        let container = NSStackView()
-        container.orientation = .vertical
-        container.spacing = 4
-        container.alignment = .leading
-        container.distribution = .fill
+    @objc private func launchAtLoginToggled() {
+        let isEnabled = launchAtLoginCheckbox.state == .on
+        if isEnabled {
+            try? LaunchAtLoginManager.register()
+        } else {
+            LaunchAtLoginManager.unregister()
+        }
+    }
 
-        let label = NSTextField(labelWithString: text)
-        label.font = NSFont.boldSystemFont(ofSize: 13)
-        label.translatesAutoresizingMaskIntoConstraints = false
-
-        let field = NSSecureTextField()
-        field.placeholderString = placeholder
-        field.stringValue = defaultValue
-        field.translatesAutoresizingMaskIntoConstraints = false
-        field.focusRingType = .exterior
-
-        apiKeyField = field
-
-        container.addArrangedSubview(label)
-        container.addArrangedSubview(field)
-
-        NSLayoutConstraint.activate([
-            field.widthAnchor.constraint(equalTo: container.widthAnchor)
-        ])
-
-        return container
+    @objc private func enableRefinementToggled() {
+        LLMRefiner.isEnabled = enableRefinementCheckbox.state == .on
     }
 
     @objc private func testConnection() {
@@ -201,13 +222,10 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
     }
 
     @objc private func saveSettings() {
-        let baseURL = apiBaseUrlField.stringValue
-        let apiKey = apiKeyField.stringValue
-        let model = modelField.stringValue
-
-        LLMRefiner.apiBaseUrl = baseURL
-        LLMRefiner.apiKey = apiKey
-        LLMRefiner.model = model
+        LLMRefiner.apiBaseUrl = apiBaseUrlField.stringValue
+        LLMRefiner.apiKey = apiKeyField.stringValue
+        LLMRefiner.model = modelField.stringValue
+        LLMRefiner.isEnabled = enableRefinementCheckbox.state == .on
 
         showAlert(title: "Saved", message: "Settings have been saved successfully.") { [weak self] in
             self?.window.close()
@@ -220,12 +238,22 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
         alert.informativeText = message
         alert.alertStyle = .informational
         alert.addButton(withTitle: "OK")
-        alert.beginSheetModal(for: window) { _ in
+        if let window = window {
+            alert.beginSheetModal(for: window) { _ in
+                completion?()
+            }
+        } else {
             completion?()
         }
     }
 
     func show() {
+        launchAtLoginCheckbox.state = LaunchAtLoginManager.isEnabled ? .on : .off
+        enableRefinementCheckbox.state = LLMRefiner.isEnabled ? .on : .off
+        apiBaseUrlField.stringValue = LLMRefiner.apiBaseUrl
+        apiKeyField.stringValue = LLMRefiner.apiKey
+        modelField.stringValue = LLMRefiner.model
+
         window.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
     }
@@ -233,27 +261,22 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
     private func setupKeyboardShortcuts() {
         NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
             guard let self = self else { return event }
-            
+
             let isCommandPressed = event.modifierFlags.contains(.command)
             let keyCode = event.keyCode
-            
-            // Key codes: C=8, V=9, X=7, A=0
+
             if isCommandPressed {
                 switch keyCode {
-                case 8: // Cmd+C
-                    Logger.settings.debug("Cmd+C captured")
+                case 8:
                     self.copy(nil)
                     return nil
-                case 9: // Cmd+V
-                    Logger.settings.debug("Cmd+V captured")
+                case 9:
                     self.paste(nil)
                     return nil
-                case 7: // Cmd+X
-                    Logger.settings.debug("Cmd+X captured")
+                case 7:
                     self.cut(nil)
                     return nil
-                case 0: // Cmd+A
-                    Logger.settings.debug("Cmd+A captured")
+                case 0:
                     self.selectAll(nil)
                     return nil
                 default:
@@ -267,33 +290,26 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
     func validateUserInterfaceItem(_ item: NSValidatedUserInterfaceItem) -> Bool {
         let selector = item.action
         let responder = window.firstResponder
-        Logger.settings.debug("validateUserInterfaceItem called: \(String(describing: selector)), firstResponder: \(String(describing: type(of: responder)))")
         let isEditingAction = selector == #selector(copy(_:)) ||
                               selector == #selector(paste(_:)) ||
                               selector == #selector(cut(_:)) ||
                               selector == #selector(selectAll(_:))
-        let result = isEditingAction && responder is NSTextField
-        Logger.settings.debug("validateUserInterfaceItem result: \(result)")
-        return result
+        return isEditingAction && responder is NSTextField
     }
 
     @objc func copy(_ sender: Any?) {
-        Logger.settings.debug("copy action called")
         window.firstResponder?.tryToPerform(#selector(copy(_:)), with: sender)
     }
 
     @objc func paste(_ sender: Any?) {
-        Logger.settings.debug("paste action called")
         window.firstResponder?.tryToPerform(#selector(paste(_:)), with: sender)
     }
 
     @objc func cut(_ sender: Any?) {
-        Logger.settings.debug("cut action called")
         window.firstResponder?.tryToPerform(#selector(cut(_:)), with: sender)
     }
 
     @objc func selectAll(_ sender: Any?) {
-        Logger.settings.debug("selectAll action called")
         window.firstResponder?.tryToPerform(#selector(selectAll(_:)), with: sender)
     }
 }

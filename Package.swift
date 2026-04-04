@@ -15,7 +15,10 @@ let package = Package(
     targets: [
         .executableTarget(
             name: "VoiceInput",
-            path: "Sources/VoiceInput"
+            path: "Sources/VoiceInput",
+            linkerSettings: [
+                .linkedFramework("ServiceManagement")
+            ]
         )
     ]
 )

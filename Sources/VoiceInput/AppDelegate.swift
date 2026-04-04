@@ -40,6 +40,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         
         Logger.app.info("Components initialized - Language: \(LanguageManager.shared.currentLanguage)")
         
+        // 4. Synchronize launch-at-login state
+        LaunchAtLoginManager.synchronizeState()
+        
         // 4. Connect callbacks
         eventMonitor.onStartRecording = { [weak self] in
             Logger.event.debug("Fn key pressed - starting recording")
@@ -122,11 +125,14 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
         menu.addItem(NSMenuItem.separator())
 
-        // LLM Refinement submenu
-        let llmMenu = buildLLMMenu()
-        let llmItem = NSMenuItem(title: "LLM Refinement", action: nil, keyEquivalent: "")
-        llmItem.submenu = llmMenu
-        menu.addItem(llmItem)
+        // Settings
+        let settingsItem = NSMenuItem(
+            title: "Settings...",
+            action: #selector(openSettings),
+            keyEquivalent: ","
+        )
+        settingsItem.target = self
+        menu.addItem(settingsItem)
 
         menu.addItem(NSMenuItem.separator())
 
@@ -175,37 +181,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         speechRecognizer.setLanguage(code)
     }
 
-    private func buildLLMMenu() -> NSMenu {
-        let menu = NSMenu(title: "LLM Refinement")
-
-        // Enable Refinement checkbox
-        let enableItem = NSMenuItem(
-            title: "Enable Refinement",
-            action: #selector(toggleLLMRefinement(_:)),
-            keyEquivalent: ""
-        )
-        enableItem.target = self
-        enableItem.state = LLMRefiner.isEnabled ? .on : .off
-        menu.addItem(enableItem)
-
-        // Settings
-        let settingsItem = NSMenuItem(
-            title: "Settings...",
-            action: #selector(openLLMSettings),
-            keyEquivalent: ""
-        )
-        settingsItem.target = self
-        menu.addItem(settingsItem)
-
-        return menu
-    }
-
-    @objc private func toggleLLMRefinement(_ sender: NSMenuItem) {
-        LLMRefiner.isEnabled.toggle()
-        sender.state = LLMRefiner.isEnabled ? .on : .off
-    }
-
-    @objc private func openLLMSettings() {
+    @objc private func openSettings() {
         settingsWindow.show()
     }
 
