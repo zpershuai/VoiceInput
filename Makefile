@@ -1,12 +1,12 @@
 .PHONY: build run install clean
 
 APP_NAME = VoiceInput
-BUILD_DIR = .build
+BUILD_DIR = build
 APP_BUNDLE = $(BUILD_DIR)/release/$(APP_NAME).app
 
 build:
 	@echo "Building $(APP_NAME)..."
-	@swift build -c release --product $(APP_NAME)
+	@swift build -c release --product $(APP_NAME) --build-path $(BUILD_DIR)
 	@echo "Creating .app bundle..."
 	@mkdir -p $(APP_BUNDLE)/Contents/MacOS
 	@mkdir -p $(APP_BUNDLE)/Contents/Resources
