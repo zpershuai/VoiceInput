@@ -1,14 +1,4 @@
-# Accessibility Permission Check
-
-## Purpose
-
-Ensure VoiceInput has the necessary macOS Accessibility permissions to function correctly. The app requires Accessibility permissions to:
-- Monitor global Fn key events for triggering voice input
-- Inject transcribed text into other applications
-
-This capability provides graceful handling when permissions are missing, guiding users through the permission grant process.
-
-## Requirements
+## MODIFIED Requirements
 
 ### Requirement: Detect missing Accessibility permissions at startup
 The system SHALL check Accessibility permission status during application initialization before attempting to create the event tap, and this launch-time check SHALL NOT trigger the macOS system Accessibility prompt automatically.

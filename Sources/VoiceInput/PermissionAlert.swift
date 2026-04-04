@@ -62,7 +62,8 @@ final class PermissionAlert: NSObject, NSWindowDelegate {
     // MARK: - Actions
 
     @objc private func openSystemSettings() {
-        NSWorkspace.shared.open(Self.systemSettingsURL)
+        Logger.app.info("User initiated opening System Settings from permission dialog")
+        GlobalEventMonitor.openSystemSettingsAccessibility()
     }
 
     @objc private func quitApplication() {

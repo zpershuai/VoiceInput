@@ -98,6 +98,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         // 6. Check accessibility permission before starting the event monitor
         handleAccessibilityPermissionAtLaunch()
         
+        logLaunchDiagnostics()
+        
         Logger.app.info("Application launched successfully")
         Logger.app.info("Log file: \(Logger.shared.getLogFilePath())")
     }
@@ -226,19 +228,24 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     // MARK: - Recording
 
     private func handleAccessibilityPermissionAtLaunch() {
-        if GlobalEventMonitor.checkAccessibilityPermission() {
-            Logger.app.info("Accessibility permission already granted")
+        let hasPermission = GlobalEventMonitor.checkAccessibilityPermission()
+        
+        Logger.app.info("Accessibility permission check at launch: \(hasPermission ? "granted" : "missing")")
+        
+        if hasPermission {
+            Logger.app.info("Starting event monitor - permission already granted")
             startEventMonitorIfNeeded()
             return
         }
 
-        Logger.app.warning("Accessibility permission missing at launch")
-        GlobalEventMonitor.requestAccessibilityPermission()
+        Logger.app.warning("Accessibility permission missing at launch - showing custom permission window")
+        // Do NOT request system prompt automatically - only show custom window
         presentAccessibilityPermissionAlert()
     }
 
     private func presentAccessibilityPermissionAlert() {
         permissionAlert = PermissionAlert { [weak self] in
+            Logger.app.info("Permission granted callback - starting event monitor")
             self?.startEventMonitorIfNeeded()
             self?.permissionAlert = nil
         }
@@ -248,12 +255,31 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func startEventMonitorIfNeeded() {
         guard !isEventMonitorRunning else {
+            Logger.app.debug("Event monitor already running, skipping start")
             return
         }
 
-        eventMonitor.start()
+        guard eventMonitor.start() else {
+            Logger.app.error("Global event monitor failed to start")
+            return
+        }
+
         isEventMonitorRunning = true
-        Logger.app.info("Global event monitor started")
+        Logger.app.info("Global event monitor started successfully")
+    }
+
+    private func logLaunchDiagnostics() {
+        let bundle = Bundle.main
+        let bundleId = bundle.bundleIdentifier ?? "unknown"
+        let bundlePath = bundle.bundlePath
+        let executablePath = bundle.executablePath ?? "unknown"
+        let hasPermission = GlobalEventMonitor.checkAccessibilityPermission()
+        
+        Logger.app.info("Launch diagnostics - Bundle ID: \(bundleId)")
+        Logger.app.info("Launch diagnostics - Bundle path: \(bundlePath)")
+        Logger.app.info("Launch diagnostics - Executable path: \(executablePath)")
+        Logger.app.info("Launch diagnostics - Accessibility permission: \(hasPermission)")
+        Logger.app.info("Launch diagnostics - Event monitor running: \(isEventMonitorRunning)")
     }
 
     private func startRecording() {

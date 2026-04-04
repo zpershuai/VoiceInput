@@ -9,9 +9,16 @@ final class GlobalEventMonitor {
     static var accessibilityPermissionChecker: () -> Bool = {
         AXIsProcessTrusted()
     }
+    /// Prompts for permission - should only be called from explicit user action
     static var accessibilityPermissionRequester: () -> Void = {
         let options = [kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true] as CFDictionary
         _ = AXIsProcessTrustedWithOptions(options)
+    }
+    /// Opens System Settings to Accessibility preferences
+    static func openSystemSettingsAccessibility() {
+        if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility") {
+            NSWorkspace.shared.open(url)
+        }
     }
 
     var onStartRecording: (() -> Void)?
@@ -32,7 +39,8 @@ final class GlobalEventMonitor {
         accessibilityPermissionRequester()
     }
 
-    func start() {
+    @discardableResult
+    func start() -> Bool {
         stop()
 
         let eventsOfInterest: CGEventMask =
@@ -49,7 +57,7 @@ final class GlobalEventMonitor {
             userInfo: Unmanaged.passUnretained(self).toOpaque()
         ) else {
             Logger.event.error("Failed to create event tap. Ensure Accessibility permissions are granted.")
-            return
+            return false
         }
 
         eventTap = tap
@@ -60,13 +68,18 @@ final class GlobalEventMonitor {
         }
 
         CGEvent.tapEnable(tap: tap, enable: true)
+        Logger.event.info("Event tap started")
+        return true
     }
 
     func updateTargetShortcut(keyCode: CGKeyCode, modifierFlags: UInt) {
+        let wasRunning = eventTap != nil
         stop()
         targetKeyCode = keyCode
         targetModifierFlags = modifierFlags
-        start()
+        if wasRunning {
+            _ = start()
+        }
         Logger.settings.info("Updated shortcut to keyCode: \(keyCode), modifiers: \(modifierFlags)")
     }
 
