@@ -1,15 +1,24 @@
 # 故障排除
 
+本文档将常见故障症状映射到可能的原因模块、所需权限、相关日志模块和源码文件，使问题定位有固定入口。
+
 ## 快速诊断
 
 ### 查看日志
 
 ```bash
-# 实时查看日志
+# 实时查看今天的日志
 tail -f ~/Library/Logs/VoiceInput/voiceinput_$(date +%Y-%m-%d).log
 
-# 查看错误
- grep "ERROR" ~/Library/Logs/VoiceInput/*.log
+# 只看错误
+grep "ERROR" ~/Library/Logs/VoiceInput/*.log
+
+# 按模块过滤
+grep "\[App\]" ~/Library/Logs/VoiceInput/*.log | tail -20
+grep "\[Speech\]" ~/Library/Logs/VoiceInput/*.log | tail -20
+grep "\[Input\]" ~/Library/Logs/VoiceInput/*.log | tail -20
+grep "\[LLM\]" ~/Library/Logs/VoiceInput/*.log | tail -20
+grep "\[Event\]" ~/Library/Logs/VoiceInput/*.log | tail -20
 ```
 
 ### 检查进程
@@ -24,300 +33,257 @@ killall VoiceInput
 
 ---
 
-## 常见问题
+## 症状 → 模块 → 日志映射表
 
-### 1. 应用无法启动
-
-**现象**：双击应用图标无反应
-
-**排查步骤**：
-
-1. 检查日志
-```bash
-cat ~/Library/Logs/VoiceInput/voiceinput_*.log | tail -20
-```
-
-2. 检查崩溃报告
-```bash
-ls ~/Library/Logs/DiagnosticReports/ | grep VoiceInput
-```
-
-3. 从终端运行查看输出
-```bash
-/Volumes/VoiceInput/VoiceInput.app/Contents/MacOS/VoiceInput
-```
-
-**常见原因**：
-- 缺少辅助功能权限
-- 签名问题
-- 依赖库缺失
+| 症状 | 可能模块 | 日志模块 | 所需权限 | 源码文件 |
+|------|---------|---------|---------|---------|
+| 按住快捷键无反应 | GlobalEventMonitor | Event | 辅助功能 | GlobalEventMonitor.swift |
+| 窗口显示但无波形 | SpeechRecognizer | Speech | 麦克风、语音识别 | SpeechRecognizer.swift |
+| 识别结果不准确 | SpeechRecognizer | Speech | 麦克风 | SpeechRecognizer.swift |
+| 文本未注入 | TextInjector | Input | 辅助功能 | TextInjector.swift |
+| LLM 润色不生效 | LLMRefiner | LLM | 网络 | LLMRefiner.swift |
+| 设置不保存 | SettingsWindow | Settings | 无 | SettingsWindow.swift |
+| 应用无法启动 | AppDelegate | App | 辅助功能 | AppDelegate.swift |
+| 语言切换无效 | LanguageManager | Settings | 无 | LanguageManager.swift |
+| 窗口动画卡顿 | FloatingWindow | UI | 无 | FloatingWindow.swift |
 
 ---
 
-### 2. 按住 Fn 键无反应
+## 详细排障路径
 
-**现象**：按住 Fn 键不显示浮动窗口
+### 1. 按住快捷键无反应
 
-**排查步骤**：
+**症状**: 按住快捷键（默认 Fn）不显示浮动窗口
 
+**诊断路径**:
+
+```
 1. 检查应用是否运行
-```bash
-pgrep -x VoiceInput || echo "未运行"
+   pgrep -x VoiceInput
+   └── 未运行 → 启动应用
+
+2. 检查辅助功能权限
+   系统设置 → 隐私与安全 → 辅助功能 → VoiceInput 是否启用
+   └── 未启用 → 启用后重启应用
+
+3. 查看 Event 日志
+   grep "\[Event\]" ~/Library/Logs/VoiceInput/*.log | tail -20
+   ├── 无日志输出 → 事件监听未启动 → 检查 AppDelegate 初始化
+   ├── "Failed to create event tap" → CGEventTap 创建失败 → 权限问题
+   └── "Event tap started" → 监听已启动 → 检查快捷键配置
+
+4. 检查快捷键配置
+   打开 Settings → Keyboard Shortcut → 确认快捷键设置
+   └── 重置为默认 → Reset to Default 按钮
+
+5. 排查冲突
+   └── 关闭 Karabiner、BetterTouchTool 等可能占用事件的应用
 ```
 
-2. 检查事件监听是否启动
-查看日志中是否有 `[Event] 启动全局事件监听`
+**关键日志关键词**: `Event tap started`, `Failed to create event tap`, `Fn key pressed`
 
-3. 检查 Fn 键事件
-在日志中搜索 `[Event] Fn 键按下`
-
-**可能原因**：
-- CGEventTap 创建失败
-- 其他应用占用了 Fn 键
-- 系统设置中 Fn 键行为被修改
-
-**解决方案**：
-- 重启应用
-- 检查系统设置 → 键盘 → 将 F1、F2 等键用作标准功能键
-- 关闭可能冲突的应用（如 Karabiner、BetterTouchTool）
+**相关文档**: [运行工作流](workflow.md) §3, [架构与模块](architecture.md) §GlobalEventMonitor
 
 ---
 
-### 3. 无法录音
+### 2. 窗口显示但无波形动画
 
-**现象**：按住 Fn 键后窗口显示，但没有波形动画
+**症状**: 按住快捷键后浮动窗口出现，但波形区域无动画
 
-**排查步骤**：
+**诊断路径**:
 
-1. 检查麦克风权限
-```bash
-# 查看麦克风权限状态
-tccutil reset Microphone com.yourcompany.VoiceInput
 ```
+1. 查看 Speech 日志
+   grep "\[Speech\]" ~/Library/Logs/VoiceInput/*.log | tail -20
+   ├── "Failed to start recording" → 权限或设备问题
+   ├── "SpeechRecognizer error" → 识别引擎错误
+   └── 无 Speech 日志 → startRecording 未被调用
 
-2. 在系统设置中检查
-系统设置 → 隐私与安全 → 麦克风 → 确保 VoiceInput 已启用
+2. 检查麦克风权限
+   系统设置 → 隐私与安全 → 麦克风 → VoiceInput 是否启用
 
 3. 检查语音识别权限
-系统设置 → 隐私与安全 → 语音识别 → 确保 VoiceInput 已启用
+   系统设置 → 隐私与安全 → 语音识别 → VoiceInput 是否启用
 
 4. 测试麦克风
-```bash
-# 使用 QuickTime 测试麦克风
-open -a "QuickTime Player"
+   系统设置 → 声音 → 输入 → 对着麦克风说话，观察输入电平
 ```
 
-**可能原因**：
-- 麦克风权限被拒绝
-- 默认输入设备错误
-- 其他应用占用麦克风
+**关键日志关键词**: `Recording started`, `notAuthorized`, `recognizerUnavailable`
+
+**相关文档**: [运行工作流](workflow.md) §4, [架构与模块](architecture.md) §SpeechRecognizer
 
 ---
 
-### 4. 识别结果不输入
+### 3. 识别结果不输入到应用
 
-**现象**：录音完成，但文本没有输入到当前应用
+**症状**: 录音完成，松开快捷键后文本没有出现在当前输入框
 
-**排查步骤**：
+**诊断路径**:
 
-1. 检查辅助功能权限
-系统设置 → 隐私与安全 → 辅助功能 → 确保 VoiceInput 已启用
+```
+1. 查看 Input 日志
+   grep "\[Input\]" ~/Library/Logs/VoiceInput/*.log | tail -20
+   ├── "Text injection successful" → 注入成功但目标应用未接收
+   ├── "Text injection failed" → CGEvent 注入失败
+   └── 无 Input 日志 → 识别文本为空，未进入注入流程
 
-2. 查看日志中的错误
-```bash
-grep "Input" ~/Library/Logs/VoiceInput/*.log | grep "ERROR"
+2. 检查辅助功能权限
+   系统设置 → 隐私与安全 → 辅助功能 → VoiceInput 是否启用
+   └── 尝试：先移除再重新添加
+
+3. 测试目标应用
+   └── 在 TextEdit 中测试 → 如果正常 → 目标应用兼容性问题
+
+4. 查看完整流程日志
+   grep -E "\[(Speech|LLM|Input)\]" ~/Library/Logs/VoiceInput/*.log | tail -30
+   ├── 有识别结果但无注入 → 检查 stopRecordingAndInject 流程
+   ├── 有 LLM 错误 → 润色失败，应 fallback 到原文
+   └── 无识别结果 → 回到问题 2 排查
 ```
 
-3. 测试剪贴板
-手动复制一段文本，确认 Cmd+V 可以粘贴
+**关键日志关键词**: `Text injection successful`, `Text injection failed`, `Captured text`
 
-4. 检查当前应用
-某些应用（如终端）可能需要特殊的粘贴方式
-
-**可能原因**：
-- 辅助功能权限不足
-- 当前应用不支持 Cmd+V
-- 输入法切换失败
-- 权限被拒绝
-
-**解决方案**：
-- 重新授权辅助功能权限（先移除再添加）
-- 确保目标应用是前台应用
-- 尝试在其他应用（如 TextEdit）中测试
+**相关文档**: [运行工作流](workflow.md) §7, [架构与模块](architecture.md) §TextInjector
 
 ---
 
-### 5. LLM 润色不工作
+### 4. LLM 润色不工作
 
-**现象**：识别结果没有润色直接输入
+**症状**: 识别结果没有经过润色直接输入
 
-**排查步骤**：
+**诊断路径**:
 
-1. 检查是否启用
-右键菜单 → LLM Refinement → 确保勾选 "Enable LLM Refinement"
+```
+1. 检查 LLM 是否启用
+   右键菜单栏 → 确认 "Enable LLM Refinement" 已勾选
 
-2. 检查配置
-右键菜单 → LLM Refinement → Settings → 确认 API 信息正确
+2. 检查 LLM 配置
+   右键菜单栏 → Settings → LLM Refinement 区域
+   ├── API Base URL 非空
+   ├── API Key 非空
+   └── Model 已设置
 
-3. 测试 API
-```bash
-curl https://api.openai.com/v1/chat/completions \
-  -H "Authorization: Bearer YOUR_API_KEY" \
-  -H "Content-Type: application/json" \
-  -d '{"model": "gpt-4o-mini", "messages": [{"role": "user", "content": "Hello"}]}'
+3. 查看 LLM 日志
+   grep "\[LLM\]" ~/Library/Logs/VoiceInput/*.log | tail -20
+   ├── "LLM refinement skipped" → 未启用或未配置
+   ├── "LLM refinement failed" → API 请求失败
+   ├── "LLM request failed with HTTP" → 网络或认证错误
+   └── "LLM refinement completed successfully" → 润色成功
+
+4. 测试 API 连接
+   Settings → Test 按钮
+   └── 失败 → 检查 URL、Key、Model 是否正确
+
+5. 手动测试 API
+   curl -s https://api.openai.com/v1/chat/completions \
+     -H "Authorization: Bearer YOUR_KEY" \
+     -H "Content-Type: application/json" \
+     -d '{"model":"gpt-4o-mini","messages":[{"role":"user","content":"Hi"}]}'
 ```
 
-4. 查看日志
-```bash
-grep "LLM" ~/Library/Logs/VoiceInput/*.log
-```
+**关键日志关键词**: `LLM refinement skipped`, `LLM request failed`, `LLM refinement completed successfully`
 
-**可能原因**：
-- LLM 未启用
-- API Key 无效
-- 网络问题
-- 超时
+**相关文档**: [运行工作流](workflow.md) §6, [架构与模块](architecture.md) §LLMRefiner
 
 ---
 
-### 6. CJK 输入乱码
+### 5. 应用无法启动
 
-**现象**：使用中文输入法时，输入的文本出现乱码或重复
+**症状**: 双击应用图标无反应
 
-**排查步骤**：
+**诊断路径**:
 
-1. 检查输入法切换
-查看日志中 `[Input] 切换到 ASCII 输入源` 和 `[Input] 恢复输入源`
+```
+1. 检查进程
+   pgrep -x VoiceInput
+   └── 已运行 → 菜单栏应显示麦克风图标 → 可能被其他窗口遮挡
 
-2. 手动测试
-- 切换到 ABC 输入法
-- 按住 Fn 说话
-- 确认文本正常输入
+2. 查看 App 日志
+   grep "\[App\]" ~/Library/Logs/VoiceInput/*.log | tail -20
+   ├── "Application launched successfully" → 启动成功
+   ├── "Accessibility permission missing" → 权限弹窗应出现
+   └── 无日志 → 应用未正常启动
 
-**可能原因**：
-- 输入法切换失败
-- 切换时机不当
-- 输入法缓存问题
+3. 从终端运行
+   .build/debug/VoiceInput
+   └── 观察控制台输出
 
-**解决方案**：
-- 确保系统有 ABC 输入法
-- 在系统设置 → 键盘 → 输入源中添加 ABC
-- 尝试手动切换到 ABC 后再使用
-
----
-
-### 7. 波形动画卡顿
-
-**现象**：录音时波形动画不流畅
-
-**排查步骤**：
-
-1. 检查 CPU 使用率
-```bash
-top -pid $(pgrep VoiceInput)
+4. 检查崩溃报告
+   ls ~/Library/Logs/DiagnosticReports/ | grep VoiceInput
 ```
 
-2. 检查日志更新频率
-确认 RMS 更新日志是否连续
+**关键日志关键词**: `Application launching`, `Application launched successfully`, `Accessibility permission`
 
-**可能原因**：
-- CPU 负载过高
-- 动画线程阻塞
-- 音频缓冲区过大
-
-**解决方案**：
-- 关闭其他占用资源的应用
-- 重启 VoiceInput
-- 降低音频采样率（修改代码）
+**相关文档**: [运行工作流](workflow.md) §1-2, [架构与模块](architecture.md) §AppDelegate
 
 ---
 
-### 8. 应用崩溃
+### 6. 语言切换无效
 
-**现象**：应用意外退出
+**症状**: 菜单栏切换语言后，识别语言未改变
 
-**排查步骤**：
+**诊断路径**:
 
+```
+1. 查看 Settings 日志
+   grep "\[Settings\]" ~/Library/Logs/VoiceInput/*.log | tail -10
+   └── "Language changed to: xx-XX" → 切换已记录
+
+2. 确认语言已勾选
+   菜单栏 → Language → 确认目标语言前有勾选标记
+
+3. 测试识别
+   按住快捷键说话 → 观察识别结果是否为目标语言
+```
+
+**关键日志关键词**: `Language changed to`, `Applied shortcut`
+
+**相关文档**: [架构与模块](architecture.md) §LanguageManager
+
+---
+
+### 7. 应用崩溃
+
+**症状**: 应用意外退出
+
+**诊断路径**:
+
+```
 1. 查看崩溃报告
-```bash
-open ~/Library/Logs/DiagnosticReports/
-```
+   open ~/Library/Logs/DiagnosticReports/
+   └── 查找 VoiceInput_*.crash
 
 2. 查看最后日志
-```bash
-tail -50 ~/Library/Logs/VoiceInput/voiceinput_*.log
+   tail -50 ~/Library/Logs/VoiceInput/voiceinput_$(date +%Y-%m-%d).log
+
+3. 常见崩溃原因
 ```
-
-3. 识别崩溃位置
-查看崩溃报告中的 `Crashed Thread` 和 `Backtrace`
-
-**常见崩溃原因**：
 
 | 崩溃位置 | 可能原因 | 解决方案 |
 |---------|---------|---------|
-| `main.swift` | AppDelegate 被释放 | 检查全局变量 |
-| `LanguageManager.init` | 递归调用 | 修复初始化逻辑 |
-| `CGEventTap` | 事件回调异常 | 添加异常处理 |
-| `SpeechRecognizer` | 音频会话冲突 | 检查麦克风占用 |
-| `TextInjector` | 权限问题 | 重新授权辅助功能 |
-
----
-
-## 性能问题
-
-### CPU 占用过高
-
-**排查**：
-```bash
-# 查看 CPU 占用
-ps -o pid,ppid,%cpu,%mem,command -p $(pgrep VoiceInput)
-```
-
-**可能原因**：
-- 日志级别设置为 DEBUG 且频繁记录
-- 波形动画过于复杂
-- 音频处理频率过高
-
-**解决方案**：
-- 修改日志级别为 INFO
-- 降低波形更新频率
-- 检查是否有内存泄漏
-
-### 内存泄漏
-
-**排查**：
-```bash
-# 查看内存占用
-ps -o pid,ppid,rss,vsz,command -p $(pgrep VoiceInput)
-```
-
-**常见泄漏点**：
-- CGEventTap 未正确释放
-- AVAudioEngine 未停止
-- 回调闭包循环引用
+| AppDelegate 初始化 | 组件初始化失败 | 检查权限和系统依赖 |
+| GlobalEventMonitor | CGEventTap 创建失败 | 重新授权辅助功能 |
+| SpeechRecognizer | 音频会话冲突 | 关闭其他使用麦克风的应用 |
+| FloatingWindow | UI 线程问题 | 确保 UI 操作在主线程 |
 
 ---
 
 ## 权限问题
 
-### 重置所有权限
+### 权限清单
 
-```bash
-# 重置辅助功能权限
-tccutil reset Accessibility com.yourcompany.VoiceInput
-
-# 重置麦克风权限
-tccutil reset Microphone com.yourcompany.VoiceInput
-
-# 重置语音识别权限
-tccutil reset SpeechRecognition com.yourcompany.VoiceInput
-```
+| 权限 | 用途 | 请求时机 | 失败影响 |
+|------|------|---------|---------|
+| 辅助功能 (Accessibility) | 全局快捷键监听、文本注入 | 启动时 | 核心功能不可用 |
+| 麦克风 (Microphone) | 音频录制 | 首次录音 | 无法录音 |
+| 语音识别 (Speech Recognition) | Apple 语音识别 | 首次录音 | 无法识别 |
 
 ### 手动添加权限
 
 1. 打开系统设置 → 隐私与安全
-2. 找到对应权限类别
-3. 点击添加按钮，选择 VoiceInput.app
+2. 找到对应权限类别（辅助功能、麦克风、语音识别）
+3. 点击 + 添加 VoiceInput.app
 
 ---
 
@@ -327,54 +293,51 @@ tccutil reset SpeechRecognition com.yourcompany.VoiceInput
 
 报告问题时请提供：
 
-1. **系统信息**
-   - macOS 版本
-   - Mac 型号
-   - VoiceInput 版本
-
-2. **日志文件**
-   ```bash
-   tar czvf voiceinput-logs.tar.gz ~/Library/Logs/VoiceInput/
-   ```
-
-3. **崩溃报告**（如有）
-   ```bash
-   cp ~/Library/Logs/DiagnosticReports/VoiceInput*.crash .
-   ```
-
-4. **复现步骤**
-   - 详细描述问题
-   - 提供稳定复现的方法
+1. **系统信息**: macOS 版本、Mac 型号
+2. **日志文件**: `tar czvf voiceinput-logs.tar.gz ~/Library/Logs/VoiceInput/`
+3. **崩溃报告**（如有）: `~/Library/Logs/DiagnosticReports/VoiceInput*.crash`
+4. **复现步骤**: 详细描述问题和稳定复现方法
 
 ### 联系方式
 
 - GitHub Issues: https://github.com/zpershuai/VoiceInput/issues
-- 邮件：your-email@example.com
 
 ---
 
-## 已知限制
+## 文档维护规则
 
-1. **Fn 键冲突**：部分键盘或系统设置可能改变 Fn 键行为
-2. **输入法兼容性**：某些第三方输入法可能无法正确切换
-3. **应用兼容性**：部分应用（如远程桌面）可能无法接收文本注入
-4. **LLM 延迟**：网络不佳时 LLM 润色可能有明显延迟
-5. **长文本**：过长的语音可能导致识别失败
+本文档是 VoiceInput 文档体系的一部分。以下规则确保文档与源码长期一致。
 
----
+### 变更触发矩阵
 
-## 调试模式
+| 变更类型 | 必须更新的文档 |
+|---------|--------------|
+| 新增用户可见功能 | `README.md` 能力摘要 + 对应深度文档 |
+| 修改核心运行链路 | [运行工作流](workflow.md) |
+| 新增/修改模块职责 | [架构与模块](architecture.md) |
+| 新增日志模块或修改日志行为 | [架构与模块](architecture.md) §Logger + 本文件 |
+| 新增权限依赖 | 本文件 §权限清单 + [运行工作流](workflow.md) |
+| 修改快捷键默认值 | [运行工作流](workflow.md) §3 |
+| 新增/修改 LLM 配置 | [架构与模块](architecture.md) §LLMRefiner |
+| 新增已知问题或限制 | 本文件 |
 
-启用详细日志：
+### 维护检查清单
 
-```bash
-# 设置环境变量运行
-LOG_LEVEL=DEBUG /Applications/VoiceInput.app/Contents/MacOS/VoiceInput
-```
+每次代码变更后检查：
 
-或修改代码：
+- [ ] 运行工作流是否仍然准确（新增/删除步骤）
+- [ ] 模块职责是否变化（新增/合并/拆分文件）
+- [ ] 回调关系是否更新（新增/删除回调）
+- [ ] 排障路径是否有效（症状是否仍然可能出现）
+- [ ] README.md 的能力摘要是否需要更新
 
-```swift
-// Logger.swift
-private let defaultLogLevel: LogLevel = .debug  // 改为 .debug
-```
+### 文档分层职责
+
+| 文档 | 职责 | 更新频率 |
+|------|------|---------|
+| `README.md` | 项目入口、快速开始、能力摘要 | 新增功能时 |
+| `docs/README.md` | 文档导航、按目标组织 | 新增文档时 |
+| `docs/workflow.md` | 端到端运行时流程 | 工作流变更时 |
+| `docs/architecture.md` | 模块边界、回调、数据流 | 架构变更时 |
+| `docs/troubleshooting.md` | 症状→模块→日志映射 | 新增故障模式时 |
+| `docs/development-guide.md` | 开发环境、构建、调试 | 工具链变更时 |
