@@ -4,26 +4,33 @@ import CoreGraphics
 
 final class TextInjector {
 
-    static func inject(text: String, completion: ((Bool) -> Void)?) {
+    static func inject(text: String, sessionId: String? = nil, completion: ((Bool) -> Void)?) {
         guard !text.isEmpty else {
+            Logger.input.warning("TextInjector received empty text, skipping injection", sessionId: sessionId)
             DispatchQueue.main.async { completion?(false) }
             return
         }
 
+        Logger.input.info("TextInjector received text (\(text.count) chars): \(text)", sessionId: sessionId)
+
         DispatchQueue.global(qos: .userInitiated).async {
-            let pasteSucceeded = Self.performInjection(text: text)
+            let pasteSucceeded = Self.performInjection(text: text, sessionId: sessionId)
             DispatchQueue.main.async {
+                if pasteSucceeded {
+                    Logger.input.info("Text injection successful", sessionId: sessionId)
+                } else {
+                    Logger.input.error("Text injection failed", sessionId: sessionId)
+                }
                 completion?(pasteSucceeded)
             }
         }
     }
 
-    private static func performInjection(text: String) -> Bool {
+    private static func performInjection(text: String, sessionId: String?) -> Bool {
         let result = DispatchQueue.main.sync { () -> Bool in
-            Logger.input.info("Starting text injection (\(text.count) chars)")
-
+            Logger.input.info("Starting text injection (\(text.count) chars): \(text)", sessionId: sessionId)
             let typingSucceeded = simulateTyping(text)
-            Logger.input.debug("Unicode typing result: \(typingSucceeded)")
+            Logger.input.debug("Unicode typing result: \(typingSucceeded)", sessionId: sessionId)
             return typingSucceeded
         }
 

@@ -40,6 +40,7 @@ final class SpeechRecognizer: NSObject {
 
     func startRecording() async throws {
         resetState()
+        Logger.speech.info("Starting speech recognition session")
 
         let authStatus = await withCheckedContinuation { continuation in
             SFSpeechRecognizer.requestAuthorization { status in
@@ -103,11 +104,13 @@ final class SpeechRecognizer: NSObject {
 
             if result.isFinal {
                 self.finalTranscription = transcription
+                Logger.speech.info("Final result (\(transcription.count) chars): \(transcription)")
                 self.finishStoppingIfNeeded(with: transcription)
                 Task { @MainActor [weak self] in
                     self?.onFinalResult?(transcription)
                 }
             } else {
+                Logger.speech.debug("Partial result (\(transcription.count) chars): \(transcription)")
                 Task { @MainActor [weak self] in
                     self?.onPartialResult?(transcription)
                 }
@@ -119,6 +122,7 @@ final class SpeechRecognizer: NSObject {
     }
 
     func stopRecording() async -> String? {
+        Logger.speech.info("stopRecording() called")
         audioEngine?.stop()
         audioEngine?.inputNode.removeTap(onBus: 0)
         recognitionRequest?.endAudio()
@@ -135,6 +139,8 @@ final class SpeechRecognizer: NSObject {
 
     private func flushStopIfNeeded() async {
         let result = finalTranscription.isEmpty ? lastTranscription : finalTranscription
+        let source = finalTranscription.isEmpty ? "lastTranscription" : "finalTranscription"
+        Logger.speech.info("flushStopIfNeeded returning from \(source) (\(result.count) chars): \(result)")
         finishStoppingIfNeeded(with: result.isEmpty ? nil : result)
     }
 

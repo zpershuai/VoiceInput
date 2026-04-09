@@ -1,3 +1,4 @@
+import ApplicationServices
 import AVFoundation
 import AppKit
 import Combine
@@ -17,6 +18,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private var permissionAlert: PermissionAlert?
     private var isRecording: Bool = false
     private var isEventMonitorRunning: Bool = false
+    private var currentSessionId: String?
 
     private var cancellables = Set<AnyCancellable>()
 
@@ -64,7 +66,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
         
         speechRecognizer.onPartialResult = { [weak self] text in
-            Logger.speech.debug("Partial result: \(text)")
+            Logger.speech.debug("Partial result: \(text)", sessionId: self?.currentSessionId)
             self?.floatingWindow.updateText(text)
         }
         
@@ -74,13 +76,13 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         
         speechRecognizer.onFinalResult = { [weak self] text in
             guard let self else { return }
-            Logger.speech.info("Final result: \(text)")
+            Logger.speech.info("Final result: \(text)", sessionId: self.currentSessionId)
             self.floatingWindow.updateText(text)
         }
         
         speechRecognizer.onError = { [weak self] error in
             guard let self else { return }
-            Logger.speech.error("SpeechRecognizer error: \(error.localizedDescription)")
+            Logger.speech.error("SpeechRecognizer error: \(error.localizedDescription)", sessionId: self.currentSessionId)
             self.floatingWindow.hide()
             self.isRecording = false
         }
@@ -285,8 +287,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private func startRecording() {
         guard !isRecording else { return }
         
+        currentSessionId = UUID().uuidString
         isRecording = true
-        Logger.app.info("Starting recording...")
+        Logger.app.info("Starting recording...", sessionId: currentSessionId)
         Task { @MainActor [weak self] in
             self?.floatingWindow.show()
         }
@@ -294,9 +297,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         Task {
             do {
                 try await speechRecognizer.startRecording()
-                Logger.app.info("Recording started successfully")
+                Logger.app.info("Recording started successfully", sessionId: currentSessionId)
             } catch {
-                Logger.app.error("Failed to start recording: \(error.localizedDescription)")
+                Logger.app.error("Failed to start recording: \(error.localizedDescription)", sessionId: currentSessionId)
                 await MainActor.run { [weak self] in
                     self?.floatingWindow.hide()
                     self?.isRecording = false
@@ -309,58 +312,90 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         guard isRecording else { return }
         
         isRecording = false
-        Logger.app.info("Stopping recording and preparing to inject text")
+        Logger.app.info("Stopping recording and preparing to inject text", sessionId: currentSessionId)
         
         Task {
             let text = await speechRecognizer.stopRecording()
             
             guard let text, !text.isEmpty else {
-                Logger.app.warning("No text captured from speech recognition")
+                Logger.app.warning("No text captured from speech recognition", sessionId: currentSessionId)
                 await MainActor.run {
                     self.floatingWindow.hide()
                 }
+                self.currentSessionId = nil
                 return
             }
             
-            Logger.app.info("Captured text (\(text.count) chars): \(text.prefix(50))...")
+            Logger.app.info("Captured text (\(text.count) chars): \(text)", sessionId: currentSessionId)
             
             if LLMRefiner.isEnabled, LLMRefiner.isConfigured {
-                Logger.llm.info("LLM refinement enabled, sending to API")
+                Logger.llm.info("LLM refinement enabled, sending to API", sessionId: currentSessionId)
                 await MainActor.run {
                     self.floatingWindow.updateStatus("Refining...")
                 }
                 
                 do {
                     let refinedText = try await LLMRefiner.refine(text: text)
-                    Logger.llm.info("LLM refinement completed")
-                    Logger.input.info("Injecting refined text")
-                    injectText(refinedText)
+                    let changed = refinedText != text
+                    Logger.llm.info("LLM refinement completed — original: \(text.count) chars, refined: \(refinedText.count) chars, changed: \(changed)", sessionId: currentSessionId)
+                    Logger.input.info("Injecting refined text", sessionId: currentSessionId)
+                    logFrontmostAppContext(sessionId: currentSessionId)
+                    injectText(refinedText, sessionId: currentSessionId)
                 } catch {
-                    Logger.llm.error("LLM refinement failed: \(error.localizedDescription)")
-                    Logger.input.info("Injecting original text (fallback)")
-                    injectText(text)
+                    Logger.llm.error("LLM refinement failed: \(error.localizedDescription)", sessionId: currentSessionId)
+                    Logger.input.info("Injecting original text (fallback)", sessionId: currentSessionId)
+                    logFrontmostAppContext(sessionId: currentSessionId)
+                    injectText(text, sessionId: currentSessionId)
                 }
             } else {
-                Logger.input.info("Injecting text directly (LLM disabled)")
-                injectText(text)
+                Logger.input.info("Injecting text directly (LLM disabled)", sessionId: currentSessionId)
+                logFrontmostAppContext(sessionId: currentSessionId)
+                injectText(text, sessionId: currentSessionId)
             }
             
             await MainActor.run {
                 self.floatingWindow.hide()
             }
+            self.currentSessionId = nil
         }
     }
 
     // MARK: - Text Injection
 
-    private func injectText(_ text: String) {
-        TextInjector.inject(text: text) { success in
+    private func injectText(_ text: String, sessionId: String?) {
+        TextInjector.inject(text: text, sessionId: sessionId) { success in
             if success {
-                Logger.input.info("Text injection successful")
+                Logger.input.info("Text injection successful", sessionId: sessionId)
             } else {
-                Logger.input.error("Text injection failed")
+                Logger.input.error("Text injection failed", sessionId: sessionId)
             }
         }
+    }
+
+    private func logFrontmostAppContext(sessionId: String?) {
+        let frontmostApp = NSWorkspace.shared.frontmostApplication
+        let bundleId = frontmostApp?.bundleIdentifier ?? "unknown"
+        
+        let systemWide = AXUIElementCreateSystemWide()
+        var focusedApp: CFTypeRef?
+        let appResult = AXUIElementCopyAttributeValue(systemWide, kAXFocusedApplicationAttribute as CFString, &focusedApp)
+        
+        var elementInfo = "unknown"
+        if appResult == .success, let app = focusedApp {
+            var focusedElement: CFTypeRef?
+            let elemResult = AXUIElementCopyAttributeValue(app as! AXUIElement, kAXFocusedUIElementAttribute as CFString, &focusedElement)
+            if elemResult == .success, let element = focusedElement {
+                var roleRef: CFTypeRef?
+                var titleRef: CFTypeRef?
+                AXUIElementCopyAttributeValue(element as! AXUIElement, kAXRoleAttribute as CFString, &roleRef)
+                AXUIElementCopyAttributeValue(element as! AXUIElement, kAXTitleAttribute as CFString, &titleRef)
+                let role = (roleRef as? String) ?? "unknown"
+                let title = (titleRef as? String) ?? "unknown"
+                elementInfo = "role:\(role) title:\(title)"
+            }
+        }
+        
+        Logger.input.info("Target app: \(bundleId), focused element: [\(elementInfo)]", sessionId: sessionId)
     }
 
     private func applyStoredShortcut() {

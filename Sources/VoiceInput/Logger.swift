@@ -228,15 +228,35 @@ struct ModuleLogger {
         Logger.shared.debug(message, module: module, file: file, function: function, line: line)
     }
     
+    func debug(_ message: String, sessionId: String?, file: String = #file, function: String = #function, line: Int = #line) {
+        let prefix = sessionId.map { "[session:\($0)] " } ?? ""
+        Logger.shared.debug(prefix + message, module: module, file: file, function: function, line: line)
+    }
+    
     func info(_ message: String, file: String = #file, function: String = #function, line: Int = #line) {
         Logger.shared.info(message, module: module, file: file, function: function, line: line)
+    }
+    
+    func info(_ message: String, sessionId: String?, file: String = #file, function: String = #function, line: Int = #line) {
+        let prefix = sessionId.map { "[session:\($0)] " } ?? ""
+        Logger.shared.info(prefix + message, module: module, file: file, function: function, line: line)
     }
     
     func warning(_ message: String, file: String = #file, function: String = #function, line: Int = #line) {
         Logger.shared.warning(message, module: module, file: file, function: function, line: line)
     }
     
+    func warning(_ message: String, sessionId: String?, file: String = #file, function: String = #function, line: Int = #line) {
+        let prefix = sessionId.map { "[session:\($0)] " } ?? ""
+        Logger.shared.warning(prefix + message, module: module, file: file, function: function, line: line)
+    }
+    
     func error(_ message: String, file: String = #file, function: String = #function, line: Int = #line) {
         Logger.shared.error(message, module: module, file: file, function: function, line: line)
+    }
+    
+    func error(_ message: String, sessionId: String?, file: String = #file, function: String = #function, line: Int = #line) {
+        let prefix = sessionId.map { "[session:\($0)] " } ?? ""
+        Logger.shared.error(prefix + message, module: module, file: file, function: function, line: line)
     }
 }
