@@ -1,0 +1,409 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Voice Orb Effect Preview</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: #050508;
+    color: #e8e8f0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 48px 24px;
+  }
+  h1 {
+    font-weight: 300;
+    font-size: 28px;
+    letter-spacing: 2px;
+    margin-bottom: 8px;
+    background: linear-gradient(90deg, #4facfe 0%, #a18cd1 50%, #fbc2eb 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+  p.subtitle {
+    color: #7a7a8a;
+    font-size: 14px;
+    margin-bottom: 48px;
+  }
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+    gap: 40px;
+    width: 100%;
+    max-width: 1200px;
+  }
+  .card {
+    background: rgba(255,255,255,0.02);
+    border: 1px solid rgba(255,255,255,0.06);
+    border-radius: 24px;
+    padding: 32px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    backdrop-filter: blur(4px);
+    transition: border-color .3s;
+  }
+  .card:hover { border-color: rgba(255,255,255,0.12); }
+  .card h2 {
+    font-size: 14px;
+    font-weight: 500;
+    color: #a0a0b0;
+    margin-bottom: 24px;
+    letter-spacing: 1px;
+  }
+  .stage {
+    width: 220px;
+    height: 220px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    margin-bottom: 24px;
+  }
+  .stage::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(circle at center, rgba(80,120,255,0.08) 0%, transparent 70%);
+    pointer-events: none;
+  }
+  button.simulate {
+    background: rgba(255,255,255,0.06);
+    border: 1px solid rgba(255,255,255,0.1);
+    color: #d0d0e0;
+    padding: 10px 22px;
+    border-radius: 20px;
+    font-size: 13px;
+    cursor: pointer;
+    transition: all .25s;
+    letter-spacing: 0.5px;
+  }
+  button.simulate:hover {
+    background: rgba(255,255,255,0.12);
+    border-color: rgba(160,180,255,0.35);
+  }
+  button.simulate:active { transform: scale(0.97); }
+
+  /* Variation A: Pure CSS Orb */
+  .css-orb {
+    width: 120px;
+    height: 120px;
+    border-radius: 50%;
+    position: relative;
+    background: radial-gradient(circle at 35% 25%, rgba(255,255,255,0.9) 0%, rgba(160,220,255,0.4) 18%, rgba(120,100,255,0.25) 40%, rgba(80,0,160,0.15) 70%, transparent 100%);
+    box-shadow:
+      inset -10px -10px 30px rgba(0,0,0,0.4),
+      inset 8px 8px 24px rgba(200,220,255,0.25),
+      0 0 30px rgba(100,150,255,0.25),
+      0 0 70px rgba(140,100,255,0.18),
+      0 0 120px rgba(80,180,255,0.08);
+    filter: blur(0.6px);
+    animation: cssBreathe 4s ease-in-out infinite;
+  }
+  .css-orb::before {
+    content: "";
+    position: absolute;
+    inset: -20px;
+    border-radius: 50%;
+    background: radial-gradient(circle at center, rgba(100,200,255,0.15) 0%, transparent 60%);
+    filter: blur(16px);
+    animation: cssAura 4s ease-in-out infinite;
+  }
+  .css-orb::after {
+    content: "";
+    position: absolute;
+    inset: -40px;
+    border-radius: 50%;
+    background: conic-gradient(from 0deg, rgba(0,240,255,0.08), rgba(160,0,255,0.08), rgba(255,0,200,0.08), rgba(0,240,255,0.08));
+    filter: blur(24px);
+    opacity: 0.6;
+    animation: cssRotate 12s linear infinite;
+  }
+  @keyframes cssBreathe {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.06); }
+  }
+  @keyframes cssAura {
+    0%, 100% { opacity: 0.5; transform: scale(1); }
+    50% { opacity: 0.9; transform: scale(1.15); }
+  }
+  @keyframes cssRotate {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+  }
+  .css-orb.speaking {
+    animation: cssSpeak 0.8s ease-in-out infinite;
+  }
+  @keyframes cssSpeak {
+    0%, 100% { transform: scale(1.05); filter: blur(0.6px) brightness(1.1); }
+    50% { transform: scale(1.18); filter: blur(1.2px) brightness(1.35); }
+  }
+
+  canvas {
+    width: 220px;
+    height: 220px;
+    display: block;
+  }
+</style>
+</head>
+<body>
+
+<h1>Voice Orb Effect Preview</h1>
+<p class="subtitle">点击下方 "Simulate Speech" 按钮，观察不同实现方案在语音输入时的动态表现</p>
+
+<div class="grid">
+
+  <!-- Variation A: CSS Glow -->
+  <div class="card">
+    <h2>Variation A: Layered CSS Glow</h2>
+    <div class="stage">
+      <div class="css-orb" id="cssOrb"></div>
+    </div>
+    <button class="simulate" onclick="triggerCSS()">Simulate Speech</button>
+  </div>
+
+  <!-- Variation B: Canvas Fluid Gradient -->
+  <div class="card">
+    <h2>Variation B: Canvas Fluid Gradient + Pulse</h2>
+    <div class="stage">
+      <canvas id="canvasB" width="440" height="440"></canvas>
+    </div>
+    <button class="simulate" onclick="triggerB()">Simulate Speech</button>
+  </div>
+
+  <!-- Variation C: Canvas Wave Distortion -->
+  <div class="card">
+    <h2>Variation C: Canvas Wave Rings + Distortion</h2>
+    <div class="stage">
+      <canvas id="canvasC" width="440" height="440"></canvas>
+    </div>
+    <button class="simulate" onclick="triggerC()">Simulate Speech</button>
+  </div>
+
+  <!-- Variation D: Canvas Noise Fluid -->
+  <div class="card">
+    <h2>Variation D: Canvas Noise Fluid Orb</h2>
+    <div class="stage">
+      <canvas id="canvasD" width="440" height="440"></canvas>
+    </div>
+    <button class="simulate" onclick="triggerD()">Simulate Speech</button>
+  </div>
+
+</div>
+
+<script>
+/* =========================================
+   Utilities
+   ========================================= */
+function clamp(v, min, max) { return Math.max(min, Math.min(max, v)); }
+function lerp(a, b, t) { return a + (b - a) * t; }
+
+/* =========================================
+   Variation A: CSS Trigger
+   ========================================= */
+function triggerCSS() {
+  const el = document.getElementById('cssOrb');
+  el.classList.add('speaking');
+  setTimeout(() => el.classList.remove('speaking'), 2200);
+}
+
+/* =========================================
+   Variation B: Canvas Fluid Gradient
+   ========================================= */
+const ctxB = document.getElementById('canvasB').getContext('2d');
+let energyB = 0;
+let targetB = 0;
+let timeB = 0;
+function triggerB() { targetB = 1; setTimeout(() => targetB = 0, 2200); }
+function drawB() {
+  const w = 440, h = 440, cx = w/2, cy = h/2;
+  targetB *= 0.99;
+  energyB = lerp(energyB, targetB, 0.08);
+  timeB += 0.015 + energyB * 0.04;
+
+  ctxB.clearRect(0,0,w,h);
+
+  const baseR = 70;
+  const pulseR = baseR + Math.sin(timeB*2) * 4 + energyB * 18;
+  const glowR = pulseR + 30 + energyB * 40;
+
+  // outer soft glow
+  const glow = ctxB.createRadialGradient(cx, cy, pulseR*0.6, cx, cy, glowR);
+  glow.addColorStop(0, `rgba(80,180,255,${0.25 + energyB*0.35})`);
+  glow.addColorStop(0.4, `rgba(160,80,255,${0.15 + energyB*0.25})`);
+  glow.addColorStop(1, 'rgba(0,0,0,0)');
+  ctxB.fillStyle = glow;
+  ctxB.beginPath(); ctxB.arc(cx, cy, glowR, 0, Math.PI*2); ctxB.fill();
+
+  // shifting gradient orb
+  const grd = ctxB.createRadialGradient(
+    cx + Math.cos(timeB)*10, cy + Math.sin(timeB)*10, 10,
+    cx, cy, pulseR
+  );
+  grd.addColorStop(0, `rgba(200,255,255,${0.85 + energyB*0.15})`);
+  grd.addColorStop(0.25, `rgba(100,200,255,${0.6 + energyB*0.2})`);
+  grd.addColorStop(0.55, `rgba(160,80,255,${0.45 + energyB*0.25})`);
+  grd.addColorStop(0.85, `rgba(255,80,180,${0.25 + energyB*0.3})`);
+  grd.addColorStop(1, 'rgba(40,0,100,0.35)');
+
+  ctxB.save();
+  ctxB.translate(cx, cy);
+  ctxB.scale(1 + energyB*0.08, 1 + energyB*0.08);
+  ctxB.translate(-cx, -cy);
+  ctxB.fillStyle = grd;
+  ctxB.beginPath(); ctxB.arc(cx, cy, pulseR, 0, Math.PI*2); ctxB.fill();
+  ctxB.restore();
+
+  // highlight
+  ctxB.fillStyle = `rgba(255,255,255,${0.35 + energyB*0.2})`;
+  ctxB.beginPath();
+  ctxB.ellipse(cx - pulseR*0.25, cy - pulseR*0.25, pulseR*0.22, pulseR*0.12, -Math.PI/4, 0, Math.PI*2);
+  ctxB.fill();
+
+  requestAnimationFrame(drawB);
+}
+drawB();
+
+/* =========================================
+   Variation C: Canvas Wave Rings
+   ========================================= */
+const ctxC = document.getElementById('canvasC').getContext('2d');
+let energyC = 0;
+let targetC = 0;
+let timeC = 0;
+const ringsC = 6;
+function triggerC() { targetC = 1; setTimeout(() => targetC = 0, 2200); }
+function drawC() {
+  const w = 440, h = 440, cx = w/2, cy = h/2;
+  targetC *= 0.985;
+  energyC = lerp(energyC, targetC, 0.07);
+  timeC += 0.02 + energyC * 0.06;
+
+  ctxC.clearRect(0,0,w,h);
+
+  // background aura
+  const aura = ctxC.createRadialGradient(cx, cy, 40, cx, cy, 160 + energyC*60);
+  aura.addColorStop(0, `rgba(0,200,255,${0.2 + energyC*0.3})`);
+  aura.addColorStop(0.5, `rgba(150,0,255,${0.1 + energyC*0.2})`);
+  aura.addColorStop(1, 'rgba(0,0,0,0)');
+  ctxC.fillStyle = aura;
+  ctxC.fillRect(0,0,w,h);
+
+  const baseR = 65;
+
+  // fluid rings
+  for (let i = 0; i < ringsC; i++) {
+    const offset = (i / ringsC) * Math.PI * 2;
+    const r = baseR + i * 4 + Math.sin(timeC + offset) * (3 + energyC * 10);
+    const alpha = 0.15 + (1 - i/ringsC) * (0.4 + energyC * 0.35);
+    ctxC.beginPath();
+    ctxC.strokeStyle = `rgba(${100 + i*20}, ${180 - i*10}, 255, ${alpha})`;
+    ctxC.lineWidth = 2 + energyC * 2;
+    for (let a = 0; a <= Math.PI*2; a += 0.08) {
+      const wobble = Math.sin(a * 4 + timeC * 3 + offset) * (2 + energyC * 8);
+      const x = cx + Math.cos(a) * (r + wobble);
+      const y = cy + Math.sin(a) * (r + wobble);
+      if (a === 0) ctxC.moveTo(x, y); else ctxC.lineTo(x, y);
+    }
+    ctxC.closePath();
+    ctxC.stroke();
+  }
+
+  // core sphere
+  const coreGrad = ctxC.createRadialGradient(cx - 15, cy - 15, 8, cx, cy, baseR);
+  coreGrad.addColorStop(0, `rgba(220,255,255,${0.9 + energyC*0.1})`);
+  coreGrad.addColorStop(0.3, `rgba(80,180,255,${0.6 + energyB*0.2})`);
+  coreGrad.addColorStop(0.7, `rgba(200,60,255,${0.35 + energyC*0.25})`);
+  coreGrad.addColorStop(1, 'rgba(20,0,60,0.4)');
+  ctxC.fillStyle = coreGrad;
+  ctxC.beginPath();
+  ctxC.arc(cx, cy, baseR + energyC * 10, 0, Math.PI*2);
+  ctxC.fill();
+
+  // highlight
+  ctxC.fillStyle = `rgba(255,255,255,${0.45 + energyC*0.25})`;
+  ctxC.beginPath();
+  ctxC.ellipse(cx - 20, cy - 20, 22, 10, -Math.PI/4, 0, Math.PI*2);
+  ctxC.fill();
+
+  requestAnimationFrame(drawC);
+}
+drawC();
+
+/* =========================================
+   Variation D: Canvas Noise Fluid
+   ========================================= */
+const ctxD = document.getElementById('canvasD').getContext('2d');
+let energyD = 0;
+let targetD = 0;
+let timeD = 0;
+function triggerD() { targetD = 1; setTimeout(() => targetD = 0, 2200); }
+
+function noise(x, y, t) {
+  return Math.sin(x * 0.05 + t) * Math.cos(y * 0.05 + t * 1.3) +
+         Math.sin(x * 0.1 - t * 0.7) * Math.cos(y * 0.08 + t * 0.5);
+}
+
+function drawD() {
+  const w = 440, h = 440, cx = w/2, cy = h/2;
+  targetD *= 0.985;
+  energyD = lerp(energyD, targetD, 0.07);
+  timeD += 0.01 + energyD * 0.04;
+
+  ctxD.clearRect(0,0,w,h);
+
+  // mega outer glow
+  const mega = ctxD.createRadialGradient(cx, cy, 60, cx, cy, 200 + energyD*80);
+  mega.addColorStop(0, `rgba(60,180,255,${0.25 + energyD*0.4})`);
+  mega.addColorStop(0.35, `rgba(180,60,255,${0.15 + energyD*0.25})`);
+  mega.addColorStop(0.7, `rgba(255,60,160,${0.08 + energyD*0.15})`);
+  mega.addColorStop(1, 'rgba(0,0,0,0)');
+  ctxD.fillStyle = mega;
+  ctxD.fillRect(0,0,w,h);
+
+  const baseR = 72;
+  const pulseR = baseR + Math.sin(timeD * 1.5) * 3 + energyD * 16;
+
+  // draw noisy orb as many concentric soft strokes
+  const steps = 40;
+  ctxD.save();
+  ctxD.translate(cx, cy);
+  ctxD.scale(1 + energyD*0.06, 1 + energyD*0.06);
+
+  for (let i = steps; i >= 0; i--) {
+    const r = (pulseR / steps) * i;
+    const n = noise(i * 2, i * 2, timeD) * (2 + energyD * 6);
+    const rr = r + n;
+
+    const t = i / steps;
+    const red = lerp(80, 255, Math.pow(t, 2) * (0.3 + energyD));
+    const green = lerp(200, 80, Math.pow(t, 1.5));
+    const blue = 255;
+    const alpha = 0.06 + (1 - t) * 0.25 + energyD * 0.15;
+
+    ctxD.beginPath();
+    ctxD.fillStyle = `rgba(${red|0}, ${green|0}, ${blue|0}, ${alpha})`;
+    ctxD.arc(0, 0, Math.max(0, rr), 0, Math.PI*2);
+    ctxD.fill();
+  }
+
+  // specular highlight
+  ctxD.fillStyle = `rgba(255,255,255,${0.5 + energyD*0.3})`;
+  ctxD.beginPath();
+  ctxD.ellipse(-22, -22, 24, 12, -Math.PI/4, 0, Math.PI*2);
+  ctxD.fill();
+
+  ctxD.restore();
+
+  requestAnimationFrame(drawD);
+}
+drawD();
+</script>
+
+</body>
+</html>
