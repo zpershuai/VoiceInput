@@ -1,6 +1,6 @@
 import AppKit
 
-/// A frameless capsule-shaped floating window that displays waveform animation
+/// A frameless capsule-shaped floating window that displays a voice orb indicator
 /// and real-time transcription text during voice input.
 public final class FloatingWindow {
 
@@ -20,7 +20,7 @@ public final class FloatingWindow {
     }
 
     private final class CapsuleView: NSVisualEffectView {
-        let waveformView: WaveformView
+        let orbView: VoiceOrbView
         let textLabel: NSTextField
 
         var layoutMetrics: LayoutMetrics {
@@ -32,7 +32,7 @@ public final class FloatingWindow {
 
         init(initialLayout: LayoutMetrics) {
             self.layoutMetrics = initialLayout
-            self.waveformView = WaveformView(frame: .zero)
+            self.orbView = VoiceOrbView(frame: .zero)
             self.textLabel = NSTextField(labelWithString: "")
 
             super.init(frame: NSRect(origin: .zero, size: initialLayout.size))
@@ -52,7 +52,7 @@ public final class FloatingWindow {
             layer?.shadowRadius = 18
             layer?.shadowOffset = CGSize(width: 0, height: -6)
 
-            waveformView.frame = .zero
+            orbView.frame = .zero
 
             textLabel.isEditable = false
             textLabel.isSelectable = false
@@ -65,7 +65,7 @@ public final class FloatingWindow {
             textLabel.backgroundColor = .clear
             textLabel.autoresizingMask = [.width, .height]
 
-            addSubview(waveformView)
+            addSubview(orbView)
             addSubview(textLabel)
 
             applyTextBehavior(for: initialLayout.mode)
@@ -89,15 +89,15 @@ public final class FloatingWindow {
                 transform: nil
             )
 
-            let waveformY = round((bounds.height - FloatingWindow.waveformHeight) / 2.0)
-            waveformView.frame = NSRect(
+            let orbY = round((bounds.height - FloatingWindow.orbHeight) / 2.0)
+            orbView.frame = NSRect(
                 x: FloatingWindow.paddingLeading,
-                y: waveformY,
-                width: FloatingWindow.waveformWidth,
-                height: FloatingWindow.waveformHeight
+                y: orbY,
+                width: FloatingWindow.orbWidth,
+                height: FloatingWindow.orbHeight
             )
 
-            let textOriginX = FloatingWindow.paddingLeading + FloatingWindow.waveformWidth + FloatingWindow.contentSpacing
+            let textOriginX = FloatingWindow.paddingLeading + FloatingWindow.orbWidth + FloatingWindow.contentSpacing
             let textOriginY = round((bounds.height - layoutMetrics.textHeight) / 2.0)
             textLabel.frame = NSRect(
                 x: textOriginX,
@@ -127,8 +127,8 @@ public final class FloatingWindow {
 
     // MARK: - Constants
 
-    fileprivate static let waveformWidth: CGFloat = 44
-    fileprivate static let waveformHeight: CGFloat = 32
+    fileprivate static let orbWidth: CGFloat = 40
+    fileprivate static let orbHeight: CGFloat = 40
     fileprivate static let paddingLeading: CGFloat = 18
     fileprivate static let paddingTrailing: CGFloat = 20
     fileprivate static let contentSpacing: CGFloat = 10
@@ -247,19 +247,19 @@ public final class FloatingWindow {
         updateDisplay(status, animated: panel.isVisible)
     }
 
-    /// Returns the waveform view for RMS updates.
-    public var waveform: WaveformView {
-        capsuleView.waveformView
+    /// Returns the voice orb view for RMS updates.
+    public var waveform: VoiceOrbView {
+        capsuleView.orbView
     }
 
     // MARK: - Layout Helpers
 
     private static var minWidth: CGFloat {
-        paddingLeading + waveformWidth + contentSpacing + textMinWidth + paddingTrailing
+        paddingLeading + orbWidth + contentSpacing + textMinWidth + paddingTrailing
     }
 
     private static var maxSingleLineWidth: CGFloat {
-        paddingLeading + waveformWidth + contentSpacing + textMaxSingleLineWidth + paddingTrailing
+        paddingLeading + orbWidth + contentSpacing + textMaxSingleLineWidth + paddingTrailing
     }
 
     private static func layoutMetrics(for text: String) -> LayoutMetrics {
@@ -280,7 +280,7 @@ public final class FloatingWindow {
             return LayoutMetrics(
                 mode: .expandedSingleLine,
                 size: CGSize(
-                    width: paddingLeading + waveformWidth + contentSpacing + clampedTextWidth + paddingTrailing,
+                    width: paddingLeading + orbWidth + contentSpacing + clampedTextWidth + paddingTrailing,
                     height: singleLineHeight
                 ),
                 textWidth: clampedTextWidth,
