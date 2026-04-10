@@ -8,7 +8,7 @@ public final class VoiceOrbView: NSView {
     private static let attackCoefficient: CGFloat = 0.18
     private static let releaseCoefficient: CGFloat = 0.08
     private static let timerInterval: TimeInterval = 1.0 / 30.0
-    private static let idleRadiusRatio: CGFloat = 0.34
+    private static let idleRadiusRatio: CGFloat = 0.42
     private static let pulseAmplitudeRatio: CGFloat = 0.03
     private static let energyRadiusBoostRatio: CGFloat = 0.11
     private static let energyScaleBoost: CGFloat = 0.08
@@ -93,7 +93,7 @@ public final class VoiceOrbView: NSView {
             + sin(animationTime * 2.0) * minSide * Self.pulseAmplitudeRatio
             + displayedEnergy * minSide * Self.energyRadiusBoostRatio
         let orbScale = 1.0 + displayedEnergy * Self.energyScaleBoost
-        let glowRadius = pulseRadius + minSide * (0.18 + displayedEnergy * 0.12)
+        let glowRadius = pulseRadius + minSide * (0.08 + displayedEnergy * 0.10)
         let center = CGPoint(x: cx, y: cy)
 
         drawOuterGlow(in: context, center: center, orbRadius: pulseRadius, glowRadius: glowRadius)
@@ -130,8 +130,8 @@ public final class VoiceOrbView: NSView {
     }
 
     private func drawOrbBody(in context: CGContext, center: CGPoint, radius: CGFloat, scale: CGFloat) {
-        let shiftX = cos(animationTime) * radius * 0.28
-        let shiftY = sin(animationTime) * radius * 0.28
+        let shiftX = cos(animationTime) * radius * 0.14
+        let shiftY = sin(animationTime) * radius * 0.14
         let gradientCenter = CGPoint(x: center.x + shiftX, y: center.y + shiftY)
 
         let colors = [
