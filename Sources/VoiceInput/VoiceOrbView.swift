@@ -8,6 +8,10 @@ public final class VoiceOrbView: NSView {
     private static let attackCoefficient: CGFloat = 0.18
     private static let releaseCoefficient: CGFloat = 0.08
     private static let timerInterval: TimeInterval = 1.0 / 30.0
+    private static let idleRadiusRatio: CGFloat = 0.34
+    private static let pulseAmplitudeRatio: CGFloat = 0.03
+    private static let energyRadiusBoostRatio: CGFloat = 0.11
+    private static let energyScaleBoost: CGFloat = 0.08
 
     // MARK: - State
 
@@ -21,7 +25,6 @@ public final class VoiceOrbView: NSView {
     public override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
         wantsLayer = false
-        layer?.backgroundColor = NSColor.clear.cgColor
         startAnimationTimer()
     }
 
@@ -62,9 +65,9 @@ public final class VoiceOrbView: NSView {
     }
 
     private func stepAnimation() {
-        targetEnergy *= 0.985
-        displayedEnergy = lerp(displayedEnergy, targetEnergy, 0.10)
-        animationTime += 0.05 + displayedEnergy * 0.08
+        targetEnergy *= 0.99
+        displayedEnergy = lerp(displayedEnergy, targetEnergy, 0.08)
+        animationTime += 0.015 + displayedEnergy * 0.04
         needsDisplay = true
     }
 
@@ -85,26 +88,31 @@ public final class VoiceOrbView: NSView {
         let cy = rect.midY
         let minSide = min(rect.width, rect.height)
 
-        let orbRadius = minSide * 0.475
-        let glowRadius = orbRadius + minSide * (0.16 + displayedEnergy * 0.07)
+        let baseRadius = minSide * Self.idleRadiusRatio
+        let pulseRadius = baseRadius
+            + sin(animationTime * 2.0) * minSide * Self.pulseAmplitudeRatio
+            + displayedEnergy * minSide * Self.energyRadiusBoostRatio
+        let orbScale = 1.0 + displayedEnergy * Self.energyScaleBoost
+        let glowRadius = pulseRadius + minSide * (0.18 + displayedEnergy * 0.12)
+        let center = CGPoint(x: cx, y: cy)
 
-        drawOuterGlow(in: context, center: CGPoint(x: cx, y: cy), orbRadius: orbRadius, glowRadius: glowRadius)
-        drawOrbBody(in: context, center: CGPoint(x: cx, y: cy), radius: orbRadius)
-        drawHighlight(in: context, center: CGPoint(x: cx, y: cy), radius: orbRadius)
+        drawOuterGlow(in: context, center: center, orbRadius: pulseRadius, glowRadius: glowRadius)
+        drawOrbBody(in: context, center: center, radius: pulseRadius, scale: orbScale)
+        drawHighlight(in: context, center: center, radius: pulseRadius, scale: orbScale)
     }
 
     private func drawOuterGlow(in context: CGContext, center: CGPoint, orbRadius: CGFloat, glowRadius: CGFloat) {
         let colors = [
-            color(red: 72, green: 170, blue: 255, alpha: 0.13 + displayedEnergy * 0.18).cgColor,
-            color(red: 138, green: 92, blue: 255, alpha: 0.08 + displayedEnergy * 0.14).cgColor,
-            color(red: 255, green: 92, blue: 182, alpha: 0.04 + displayedEnergy * 0.10).cgColor,
+            color(red: 80, green: 180, blue: 255, alpha: 0.25 + displayedEnergy * 0.35).cgColor,
+            color(red: 160, green: 80, blue: 255, alpha: 0.15 + displayedEnergy * 0.25).cgColor,
+            color(red: 255, green: 92, blue: 182, alpha: 0.07 + displayedEnergy * 0.14).cgColor,
             color(red: 0, green: 0, blue: 0, alpha: 0.0).cgColor
         ] as CFArray
 
         guard let gradient = CGGradient(
             colorsSpace: CGColorSpaceCreateDeviceRGB(),
             colors: colors,
-            locations: [0.0, 0.38, 0.72, 1.0]
+            locations: [0.0, 0.4, 0.72, 1.0]
         ) else {
             return
         }
@@ -121,35 +129,41 @@ public final class VoiceOrbView: NSView {
         context.restoreGState()
     }
 
-    private func drawOrbBody(in context: CGContext, center: CGPoint, radius: CGFloat) {
-        let shiftX = cos(animationTime) * radius * (0.10 + displayedEnergy * 0.04)
-        let shiftY = sin(animationTime) * radius * (0.10 + displayedEnergy * 0.04)
+    private func drawOrbBody(in context: CGContext, center: CGPoint, radius: CGFloat, scale: CGFloat) {
+        let shiftX = cos(animationTime) * radius * 0.28
+        let shiftY = sin(animationTime) * radius * 0.28
         let gradientCenter = CGPoint(x: center.x + shiftX, y: center.y + shiftY)
 
         let colors = [
-            color(red: 150, green: 238, blue: 255, alpha: 0.30 + displayedEnergy * 0.08).cgColor,
-            color(red: 86, green: 198, blue: 255, alpha: 0.38 + displayedEnergy * 0.14).cgColor,
-            color(red: 112, green: 120, blue: 255, alpha: 0.32 + displayedEnergy * 0.16).cgColor,
-            color(red: 176, green: 82, blue: 255, alpha: 0.28 + displayedEnergy * 0.16).cgColor,
-            color(red: 255, green: 92, blue: 182, alpha: 0.18 + displayedEnergy * 0.20).cgColor,
-            color(red: 58, green: 40, blue: 140, alpha: 0.08 + displayedEnergy * 0.04).cgColor
+            color(red: 200, green: 255, blue: 255, alpha: 0.85 + displayedEnergy * 0.15).cgColor,
+            color(red: 100, green: 200, blue: 255, alpha: 0.60 + displayedEnergy * 0.20).cgColor,
+            color(red: 160, green: 80, blue: 255, alpha: 0.45 + displayedEnergy * 0.25).cgColor,
+            color(red: 255, green: 80, blue: 180, alpha: 0.25 + displayedEnergy * 0.30).cgColor,
+            color(red: 40, green: 0, blue: 100, alpha: 0.35).cgColor
         ] as CFArray
 
         guard let gradient = CGGradient(
             colorsSpace: CGColorSpaceCreateDeviceRGB(),
             colors: colors,
-            locations: [0.0, 0.16, 0.36, 0.58, 0.82, 1.0]
+            locations: [0.0, 0.25, 0.55, 0.85, 1.0]
         ) else {
             return
         }
 
         context.saveGState()
-        let orbPath = CGPath(ellipseIn: CGRect(
-            x: center.x - radius,
-            y: center.y - radius,
-            width: radius * 2.0,
-            height: radius * 2.0
-        ), transform: nil)
+        context.translateBy(x: center.x, y: center.y)
+        context.scaleBy(x: scale, y: scale)
+        context.translateBy(x: -center.x, y: -center.y)
+
+        let orbPath = CGPath(
+            ellipseIn: CGRect(
+                x: center.x - radius,
+                y: center.y - radius,
+                width: radius * 2.0,
+                height: radius * 2.0
+            ),
+            transform: nil
+        )
 
         context.addPath(orbPath)
         context.clip()
@@ -162,7 +176,7 @@ public final class VoiceOrbView: NSView {
             options: [.drawsAfterEndLocation]
         )
 
-        let rimColor = color(red: 226, green: 242, blue: 255, alpha: 0.06 + displayedEnergy * 0.03).cgColor
+        let rimColor = color(red: 235, green: 245, blue: 255, alpha: 0.12 + displayedEnergy * 0.06).cgColor
         context.setStrokeColor(rimColor)
         context.setLineWidth(0.8)
         context.addPath(orbPath)
@@ -171,16 +185,19 @@ public final class VoiceOrbView: NSView {
         context.restoreGState()
     }
 
-    private func drawHighlight(in context: CGContext, center: CGPoint, radius: CGFloat) {
-        let highlightAlpha = 0.10 + displayedEnergy * 0.06
+    private func drawHighlight(in context: CGContext, center: CGPoint, radius: CGFloat, scale: CGFloat) {
+        let highlightAlpha = 0.35 + displayedEnergy * 0.20
         let highlightRect = CGRect(
-            x: center.x - radius * 0.44,
-            y: center.y + radius * 0.10,
-            width: radius * 0.34,
-            height: radius * 0.18
+            x: center.x - radius * 0.47,
+            y: center.y + radius * 0.13,
+            width: radius * 0.44,
+            height: radius * 0.24
         )
 
         context.saveGState()
+        context.translateBy(x: center.x, y: center.y)
+        context.scaleBy(x: scale, y: scale)
+        context.translateBy(x: -center.x, y: -center.y)
         context.translateBy(x: highlightRect.midX, y: highlightRect.midY)
         context.rotate(by: -.pi / 4.0)
         context.translateBy(x: -highlightRect.midX, y: -highlightRect.midY)

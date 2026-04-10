@@ -127,11 +127,11 @@ public final class FloatingWindow {
 
     // MARK: - Constants
 
-    fileprivate static let orbWidth: CGFloat = 40
-    fileprivate static let orbHeight: CGFloat = 40
-    fileprivate static let paddingLeading: CGFloat = 18
+    fileprivate static let orbWidth: CGFloat = 52
+    fileprivate static let orbHeight: CGFloat = 52
+    fileprivate static let paddingLeading: CGFloat = 20
     fileprivate static let paddingTrailing: CGFloat = 20
-    fileprivate static let contentSpacing: CGFloat = 10
+    fileprivate static let contentSpacing: CGFloat = 8
     fileprivate static let singleLineHeight: CGFloat = 64
     fileprivate static let twoLineHeight: CGFloat = 88
     fileprivate static let textMinWidth: CGFloat = 180
